@@ -1,4 +1,3 @@
-
 template<typename Data>
 
 class vector {
@@ -16,6 +15,7 @@ public:
   }; // Copy constuctor
   ~vector() {
     free(d_data);
+    d_size = 0; //Had to add this in as it kept old size after freeing.
   }; // Destructor
   vector &operator=(vector const &other) {
     free(d_data);
@@ -123,17 +123,16 @@ struct state
 struct node
 {
   vector<node*> child;
-  vector<bool(*)()>* tests;
+  vector<bool(*)()> tests;
   node() {
   }
   void node2(bool(*f)())
   {
     this->tests.push_back(f);
   }
-  void node3(vector<bool(*)()>* listOfTests)
+  void node3(vector<bool(*)()> listOfTests)
   {
     tests = listOfTests;
-    return;
   }
   int test()
   {
@@ -205,13 +204,22 @@ void setup() {
   Serial.print("3");
   funcs.push_back(&frontLift); //0
   Serial.print("4");
-  root->node3(&funcs);          //pass it the function pointers
+  root->node3(funcs);          //pass it the function pointers
   Serial.print("5");
+  
+  
   node* oneLifted = (node*) malloc (sizeof(*oneLifted));//create oneLifted node
   Serial.print("6");
   root->child.push_back(oneLifted); //0, point root to this node
+  Serial.print("7");
+  
+  //free memory in funcs
+  funcs.~vector();
+  
   funcs.push_back(&backLift); //0
+  Serial.print("8");
   oneLifted->node3(funcs); //pass it the function pointers
+  Serial.print("9");
 }
 
 node* curr = root;
@@ -241,4 +249,3 @@ void loop() {
     Serial.println("This tick, all of the tests returned false.");
   }
 }
-
