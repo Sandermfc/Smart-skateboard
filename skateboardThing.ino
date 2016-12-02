@@ -48,12 +48,10 @@ private:
   };// Allocates double the old space
 };
 
-
-//more stuff for gyro?
-
 const int xIn = A0;
 const int yIn = A1;
 const int zIn = A2;
+//more stuff for gyro?
 
 const int trigPin1 = 2;
 const int echoPin1 = A3;
@@ -65,12 +63,11 @@ const int pressIn2 = A6;
 
 struct state
 {
-  int ultraSound1;            //how to read:
+  int ultraSound[2];            //how to read:
   //pulsein(pinNum, HIGH);
   //Returns the length of time it received a HIGH pulse
   //to convert that to a distance, you have to do:
-  //distance = (duration / 2) / 29.1;
-  int ultraSound2;            //
+  //distance = (duration / 2) / 29.1;         //
   boolean pressurePlate1;     //analog, lots of force applied = HIGH;
   boolean pressurePlate2;     //analog, lots of force applied = HIGH;
   int x;                      //Output acceleration on X axis as analog voltage between 0V and 5V
@@ -87,16 +84,17 @@ struct state
     digitalWrite(trigPin1, HIGH);
     digitalWrite(trigPin1, LOW);
     int duration = pulseIn(echoPin1, HIGH);
-    ultraSound1 = duration/58.2;
-    Serial.println("ultraSound1 = ");
-
+    ultraSound[0] = duration/58.2;
+    Serial.print("ultraSound1 = ");
+    Serial.println(ultraSound[0]);
     //get pulse length of 2nd ultrasound sensor and convert to distance
     digitalWrite(trigPin2, LOW);
     digitalWrite(trigPin2, HIGH);
     digitalWrite(trigPin2, LOW);
     duration = pulseIn(echoPin2, HIGH);
-    ultraSound2 = duration/58.2;
-    Serial.println("ultraSound2 = ");
+    ultraSound[1] = duration/58.2;
+    Serial.print("ultraSound2 = ");
+    Serial.println(ultraSound[1]);
 
     //if pressure plate 1 is pressed enough, then pressurePlate1 = true
     if(analogRead(pressIn1) == HIGH) //pressure plate 1 pressed?
@@ -119,6 +117,15 @@ struct state
 
   }
 };
+
+
+const int numSavedStates = 10;
+state states[numSavedStates];
+int frontOfTable = 0;
+
+//This helps to see which of the two sensors is triggered first (so which is the front/back)
+boolean firstUltrasound; //0 for the first one, 1 for the other
+boolean firstPressure;   //0 for the first one, 1 for the other
 
 struct node
 {
@@ -168,25 +175,38 @@ struct node
 
 bool frontLift()
 {
+  const int buffer = 8; //TODO, play around with this value to reduce the ammount of false positives
+                        //Keeping in mind the margin of error on the ultrasound sensors is approximately +-2
   //check if either of the ultrasound sensors increases abruptly
-
-  if(true)
+  if(states[frontOfTable-1].ultraSound[0]+buffer < states[frontOfTable].ultraSound[0])
+  {
+    Serial.print("ultrasoundSensor 1 increased abruptly");
+    firstUltrasound = 0; //this sensor was the first to lift (useful for backLift function)
     return true;
-  else
-    return false;
-
+  }
+  if(states[frontOfTable-1].ultraSound[1]+buffer < states[frontOfTable].ultraSound[1])
+  {
+    Serial.print("ultraSound sensor 2 increased abruptly");
+    firstUltrasound = 1; //this sensor was the first to lift (useful for backLift function)
+    return true;
+  }
+  return false;
 }
 bool backLift()
 {
-  //check if either of the ultrasound sensors increases abruptly
-  //return false; //placeholder
+  //the first ultrasound sensor to get "triggered" by frontLift() is saved in the bool global variable "firstUltrasound" (0 for ultraSound[0] and 1 for ultraSound[1])
+  //check to see if the OTHER one passes the height of the first
+  //as in: return true if the height of ultraSound[1] > height of ultraSound[0]
+  //Once it gets there, save the height and use that to calculate the score.
+  //TODO, make sure to do pythagore with the accelerometer to calculate height from the ground and not distance to nearest object like it is now.
+  
   return false;
 }
 
 void setup() {
   //Baud and pin setup
   Serial.begin(9600); //print to serial monitor
-  Serial.print("1");
+  //Serial.print("1");
   pinMode(trigPin1, OUTPUT);
   pinMode(echoPin1, INPUT);
   pinMode(trigPin2, OUTPUT);
@@ -199,36 +219,39 @@ void setup() {
 
   //create decision tree
   vector<bool(*)()> funcs;
-  Serial.print("2");
+  
+  //Serial.print("2");
+  
+  //root
   root = (node*) malloc (sizeof(*root)); //create the root node
-  Serial.print("3");
+  //Serial.print("3");
   funcs.push_back(&frontLift); //0
-  Serial.print("4");
+  //Serial.print("4");
   root->node3(funcs);          //pass it the function pointers
-  Serial.print("5");
+  //Serial.print("5");
+  //free memory in funcs
+  funcs.~vector();
+  //funcs.vector();
   
-  
+  //first side of the skateboard has been lifted
   node* oneLifted = (node*) malloc (sizeof(*oneLifted));//create oneLifted node
   Serial.print("6");
   root->child.push_back(oneLifted); //0, point root to this node
   Serial.print("7");
-  
-  //free memory in funcs
-  funcs.~vector();
-  
   funcs.push_back(&backLift); //0
   Serial.print("8");
   oneLifted->node3(funcs); //pass it the function pointers
   Serial.print("9");
+  //funcs.~vector();
+  //funcs.vector();
+  Serial.println("end of setup");
+  
 }
 
 node* curr = root;
 
-const int numSavedStates = 10;
-state states[numSavedStates];
-int frontOfTable = 0;
-
 void loop() {
+  //Serial.println("Start of loop");
   state temp;
 
   //Get all the data at this instant into a struct
@@ -246,6 +269,6 @@ void loop() {
   }
   else
   {
-    Serial.println("This tick, all of the tests returned false.");
+    //Serial.println("All of the tests returned false.");
   }
 }
