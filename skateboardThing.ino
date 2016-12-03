@@ -61,6 +61,8 @@ const int echoPin2 = A4;
 const int pressIn1 = A5;
 const int pressIn2 = A6;
 
+const int marginOfError = 2;
+
 struct state
 {
   int ultraSound[2];            //how to read:
@@ -79,6 +81,7 @@ struct state
   void getData()
   {
     Serial.println("getData()");
+    
     //get pulse length of 1st ultrasound sensor and convert to distance
     digitalWrite(trigPin1, LOW);
     digitalWrite(trigPin1, HIGH);
@@ -87,6 +90,7 @@ struct state
     ultraSound[0] = duration/58.2;
     Serial.print("ultraSound1 = ");
     Serial.println(ultraSound[0]);
+    
     //get pulse length of 2nd ultrasound sensor and convert to distance
     digitalWrite(trigPin2, LOW);
     digitalWrite(trigPin2, HIGH);
@@ -95,6 +99,11 @@ struct state
     ultraSound[1] = duration/58.2;
     Serial.print("ultraSound2 = ");
     Serial.println(ultraSound[1]);
+    
+    //Read ACCELERATIONS (done directly after ultrasound as we want them to be IDEALLY read at the same time)
+    x = analogRead(xIn);
+    y = analogRead(yIn);
+    z = analogRead(zIn);
 
     //if pressure plate 1 is pressed enough, then pressurePlate1 = true
     if(analogRead(pressIn1) == HIGH) //pressure plate 1 pressed?
@@ -108,13 +117,18 @@ struct state
     else
       pressurePlate2 = false;
 
-    //Read ACCELERATIONS
-    x = analogRead(xIn);
-    y = analogRead(yIn);
-    z = analogRead(zIn);
-
     //TODO, convert to an orientation, these are only accelerations
 
+  }
+  int calculateHeight1()
+  {
+    //TODO
+    return 0; //placeholder
+  }
+  int calculateHeight2()
+  {
+    //TODO
+    return 0;
   }
 };
 
@@ -126,6 +140,9 @@ int frontOfTable = 0;
 //This helps to see which of the two sensors is triggered first (so which is the front/back)
 boolean firstUltrasound; //0 for the first one, 1 for the other
 boolean firstPressure;   //0 for the first one, 1 for the other
+
+//This helps get a baseline height
+int baseHeight;
 
 struct node
 {
@@ -173,18 +190,37 @@ struct node
 }
 *root;
 
+
+bool initialise()
+{
+  //TODO implement a getHeight function in struct state (take into account orientation and do pythagore to get absolute height
+  /*int x = states[0];
+  int average=x;
+  for(int i=1; i< numSavedStates; i++)
+  {
+    if(x <= states[i] - marginOfError || x >= states[i] + marginOfError) //if states stays relatively the same (within margin of error) for numSavedStates iterations
+    {
+      return false;
+    }
+    total+=states[i];
+  }
+  average/=numSavedStates;
+  baseHeight = average;*/
+  return true;
+}
+
 bool frontLift()
 {
-  const int buffer = 8; //TODO, play around with this value to reduce the ammount of false positives
+  const int buffer = 2; //TODO, play around with this value to reduce the ammount of false positives
                         //Keeping in mind the margin of error on the ultrasound sensors is approximately +-2
   //check if either of the ultrasound sensors increases abruptly
-  if(states[frontOfTable-1].ultraSound[0]+buffer < states[frontOfTable].ultraSound[0])
+  if(states[frontOfTable-1].ultraSound[0]+buffer+marginOfError < states[frontOfTable].ultraSound[0])
   {
     Serial.print("ultrasoundSensor 1 increased abruptly");
     firstUltrasound = 0; //this sensor was the first to lift (useful for backLift function)
     return true;
   }
-  if(states[frontOfTable-1].ultraSound[1]+buffer < states[frontOfTable].ultraSound[1])
+  if(states[frontOfTable-1].ultraSound[1]+buffer+marginOfError < states[frontOfTable].ultraSound[1])
   {
     Serial.print("ultraSound sensor 2 increased abruptly");
     firstUltrasound = 1; //this sensor was the first to lift (useful for backLift function)
