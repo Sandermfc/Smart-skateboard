@@ -1,3 +1,5 @@
+#include "pullDataXG.h"
+
 template<typename Data>
 
 class vector {
@@ -13,9 +15,14 @@ public:
     d_data = (Data *)malloc(d_capacity * sizeof(Data));
     memcpy(d_data, other.d_data, d_size * sizeof(Data));
   }; // Copy constuctor
+  /*void empty()
+  {
+    d_size = 0;
+    d_capacity = 0;
+    d_data = 0;
+  }*/
   ~vector() {
     free(d_data);
-    d_size = 0; //Had to add this in as it kept old size after freeing.
   }; // Destructor
   vector &operator=(vector const &other) {
     free(d_data);
@@ -48,11 +55,6 @@ private:
   };// Allocates double the old space
 };
 
-const int xIn = A0;
-const int yIn = A1;
-const int zIn = A2;
-//more stuff for gyro?
-
 const int trigPin1 = 2;
 const int echoPin1 = A3;
 const int trigPin2 = 3;
@@ -63,6 +65,8 @@ const int pressIn2 = A6;
 
 const int marginOfError = 2;
 
+//pullDataXG.h deals with the accelerometer/gyro pins
+
 struct state
 {
   int ultraSound[2];            //how to read:
@@ -72,9 +76,7 @@ struct state
   //distance = (duration / 2) / 29.1;         //
   boolean pressurePlate1;     //analog, lots of force applied = HIGH;
   boolean pressurePlate2;     //analog, lots of force applied = HIGH;
-  int x;                      //Output acceleration on X axis as analog voltage between 0V and 5V
-  int y;                      //Output acceleration on Y axis as analog voltage between 0V and 5V
-  int z;                      //Output acceleration on Z axis as analog voltage between 0V and 5V
+  orientation myOrientation;  //xyz coordinates
 
   //more stuff for gyroscope?
 
@@ -100,10 +102,8 @@ struct state
     Serial.print("ultraSound2 = ");
     Serial.println(ultraSound[1]);
     
-    //Read ACCELERATIONS (done directly after ultrasound as we want them to be IDEALLY read at the same time)
-    x = analogRead(xIn);
-    y = analogRead(yIn);
-    z = analogRead(zIn);
+    //Read the orientation (done directly after ultrasound as we want them to be IDEALLY read at the same time)
+    myOrientation = pullStuff(); //yaw - pitch - roll
 
     //if pressure plate 1 is pressed enough, then pressurePlate1 = true
     if(analogRead(pressIn1) == HIGH) //pressure plate 1 pressed?
@@ -118,7 +118,6 @@ struct state
       pressurePlate2 = false;
 
     //TODO, convert to an orientation, these are only accelerations
-
   }
   int calculateHeight1()
   {
@@ -156,12 +155,12 @@ struct node
   }
   void node3(vector<bool(*)()> listOfTests)
   {
+    //Serial.print("before");
     tests = listOfTests;
+    //Serial.print("After");
   }
   int test()
   {
-    while (true)
-    {
       for (int i = 0; i < tests.size(); i++)
       {
         bool funcVal = tests[i]();
@@ -181,7 +180,6 @@ struct node
         }
       }
       return -1; //none are true;
-    }
   }
   node* getChild(int childNumber)
   {
@@ -241,45 +239,33 @@ bool backLift()
 
 void setup() {
   //Baud and pin setup
-  Serial.begin(9600); //print to serial monitor
-  //Serial.print("1");
+  Serial.begin(115200); //print to serial monitor
+  Serial.print("1");
   pinMode(trigPin1, OUTPUT);
   pinMode(echoPin1, INPUT);
   pinMode(trigPin2, OUTPUT);
   pinMode(echoPin2, INPUT);
   pinMode(pressIn1, INPUT);
   pinMode(pressIn2, INPUT);
-  pinMode(xIn, INPUT);
-  pinMode(yIn, INPUT);
-  pinMode(zIn, INPUT);
 
-  //create decision tree
-  vector<bool(*)()> funcs;
+  prepareXG(); //calls the initialise function in the pullDataXG.h header
   
-  //Serial.print("2");
+  //create decision tree
+  
+  Serial.print("2");
   
   //root
   root = (node*) malloc (sizeof(*root)); //create the root node
-  //Serial.print("3");
-  funcs.push_back(&frontLift); //0
-  //Serial.print("4");
-  root->node3(funcs);          //pass it the function pointers
-  //Serial.print("5");
-  //free memory in funcs
-  funcs.~vector();
-  //funcs.vector();
+  Serial.print("3");
+  root->node2(&frontLift);          //pass it the function pointers
+  Serial.print("5");
   
   //first side of the skateboard has been lifted
   node* oneLifted = (node*) malloc (sizeof(*oneLifted));//create oneLifted node
   Serial.print("6");
   root->child.push_back(oneLifted); //0, point root to this node
   Serial.print("7");
-  funcs.push_back(&backLift); //0
-  Serial.print("8");
-  oneLifted->node3(funcs); //pass it the function pointers
-  Serial.print("9");
-  //funcs.~vector();
-  //funcs.vector();
+  oneLifted->node2(&backLift); //pass it the function pointers
   Serial.println("end of setup");
   
 }
@@ -308,3 +294,5 @@ void loop() {
     //Serial.println("All of the tests returned false.");
   }
 }
+
+
