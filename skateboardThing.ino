@@ -55,9 +55,9 @@ private:
   };// Allocates double the old space
 };
 
-const int trigPin1 = 2;
+const int trigPin1 = 3;
 const int echoPin1 = A3;
-const int trigPin2 = 3;
+const int trigPin2 = 4;
 const int echoPin2 = A4;
 
 const int pressIn1 = A5;
@@ -104,6 +104,10 @@ struct state
     
     //Read the orientation (done directly after ultrasound as we want them to be IDEALLY read at the same time)
     myOrientation = pullStuff(); //yaw - pitch - roll
+    Serial.println(myOrientation.yaw);
+    Serial.println(myOrientation.pitch);
+    Serial.println(myOrientation.roll);
+    
 
     //if pressure plate 1 is pressed enough, then pressurePlate1 = true
     if(analogRead(pressIn1) == HIGH) //pressure plate 1 pressed?
@@ -239,7 +243,7 @@ bool backLift()
 
 void setup() {
   //Baud and pin setup
-  Serial.begin(115200); //print to serial monitor
+  Serial.begin(9600); //print to serial monitor
   Serial.print("1");
   pinMode(trigPin1, OUTPUT);
   pinMode(echoPin1, INPUT);
@@ -248,7 +252,7 @@ void setup() {
   pinMode(pressIn1, INPUT);
   pinMode(pressIn2, INPUT);
 
-  prepareXG(); //calls the initialise function in the pullDataXG.h header
+ 
   
   //create decision tree
   
@@ -266,6 +270,8 @@ void setup() {
   root->child.push_back(oneLifted); //0, point root to this node
   Serial.print("7");
   oneLifted->node2(&backLift); //pass it the function pointers
+  prepareXG(); //calls the initialise function in the pullDataXG.h header
+  //delay(15000);
   Serial.println("end of setup");
   
 }
