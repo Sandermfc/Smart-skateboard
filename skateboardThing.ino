@@ -77,6 +77,8 @@ struct state
   boolean pressurePlate1;     //analog, lots of force applied = HIGH;
   boolean pressurePlate2;     //analog, lots of force applied = HIGH;
   orientation myOrientation;  //xyz coordinates
+  float absoluteHeight1;
+  float absoluteHeight2;
 
   //more stuff for gyroscope?
 
@@ -107,7 +109,9 @@ struct state
     Serial.println(myOrientation.yaw);
     Serial.println(myOrientation.pitch);
     Serial.println(myOrientation.roll);
-    
+
+    absoluteHeight1 = calculateHeight1();
+    absoluteHeight2 = calculateHeight2();
 
     //if pressure plate 1 is pressed enough, then pressurePlate1 = true
     if(analogRead(pressIn1) == HIGH) //pressure plate 1 pressed?
@@ -196,39 +200,52 @@ struct node
 bool initialise()
 {
   //TODO implement a getHeight function in struct state (take into account orientation and do pythagore to get absolute height
-  /*int x = states[0];
+  int total1;
+  int total2;
+  int average1;
+  int average2;
+  int baseHeight1;
+  int baseHeight2;
+  
+  int x = states[0].absoluteHeight1;
+  int y = states[0].absoluteHeight2;
   int average=x;
   for(int i=1; i< numSavedStates; i++)
   {
-    if(x <= states[i] - marginOfError || x >= states[i] + marginOfError) //if states stays relatively the same (within margin of error) for numSavedStates iterations
-    {
-      return false;
-    }
-    total+=states[i];
+    total1+=states[i].absoluteHeight1;
+    total2+=states[i].absoluteHeight2;
   }
-  average/=numSavedStates;
-  baseHeight = average;*/
+  average1/=numSavedStates;
+  average2/=numSavedStates;
+  baseHeight1 = average;
+  baseHeight2 = average; 
   return true;
 }
 
 bool frontLift()
 {
+  bool flag1;
+  bool flag2;
   const int buffer = 2; //TODO, play around with this value to reduce the ammount of false positives
                         //Keeping in mind the margin of error on the ultrasound sensors is approximately +-2
   //check if either of the ultrasound sensors increases abruptly
-  if(states[frontOfTable-1].ultraSound[0]+buffer+marginOfError < states[frontOfTable].ultraSound[0])
+  for(int i = (frontOfTable+1)%numSavedStates; i!= frontOfTable;++i%numSavedStates)
   {
-    Serial.print("ultrasoundSensor 1 increased abruptly");
-    firstUltrasound = 0; //this sensor was the first to lift (useful for backLift function)
-    return true;
-  }
-  if(states[frontOfTable-1].ultraSound[1]+buffer+marginOfError < states[frontOfTable].ultraSound[1])
+    if(states[(i+1)%numSavedStates].absoluteHeight1 < states[i].absoluteHeight1)
+        flag1 = true;
+    if(states[(i+1)%numSavedStates].absoluteHeight2 < states[i].absoluteHeight2) 
+        flag2 = true;
+  }    
+  if(flag1 && flag2)
+    return false;
+  else
   {
-    Serial.print("ultraSound sensor 2 increased abruptly");
-    firstUltrasound = 1; //this sensor was the first to lift (useful for backLift function)
-    return true;
+    if(flag1)
+      firstUltrasound = 0;
+    else
+      firstUltrasound = 1;
   }
-  return false;
+ return true;
 }
 bool backLift()
 {
