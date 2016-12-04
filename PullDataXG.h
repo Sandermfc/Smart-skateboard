@@ -141,6 +141,14 @@ float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gra
 // packet structure for InvenSense teapot demo
 uint8_t teapotPacket[14] = { '$', 0x02, 0,0, 0,0, 0,0, 0,0, 0x00, 0x00, '\r', '\n' };
 
+struct orientation
+{
+  int yaw;
+  int roll;
+  int pitch;
+  
+  
+};
 
 
 // ================================================================
@@ -158,7 +166,7 @@ void dmpDataReady() {
 // ===                      INITIAL SETUP                       ===
 // ================================================================
 
-void setup() {
+void prepareXG() {
     // join I2C bus (I2Cdev library doesn't do this automatically)
     #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
         Wire.begin();
@@ -170,8 +178,8 @@ void setup() {
     // initialize serial communication
     // (115200 chosen because it is required for Teapot Demo output, but it's
     // really up to you depending on your project)
-    Serial.begin(115200);
-    while (!Serial); // wait for Leonardo enumeration, others continue immediately
+    //Serial.begin(115200);
+    //while (!Serial); // wait for Leonardo enumeration, others continue immediately
 
     // NOTE: 8MHz or slower host processors, like the Teensy @ 3.3v or Ardunio
     // Pro Mini running at 3.3v, cannot handle this baud rate reliably due to
@@ -180,12 +188,12 @@ void setup() {
     // crystal solution for the UART timer.
 
     // initialize device
-    Serial.println(F("Initializing I2C devices..."));
+    //Serial.println(F("Initializing I2C devices..."));
     mpu.initialize();
 
     // verify connection
-    Serial.println(F("Testing device connections..."));
-    Serial.println(mpu.testConnection() ? F("MPU6050 connection successful") : F("MPU6050 connection failed"));
+    //Serial.println(F("Testing device connections..."));
+    //Serial.println(mpu.testConnection() ? F("MPU6050 connection successful") : F("MPU6050 connection failed"));
 
     // wait for ready
     Serial.println(F("\nSend any character to begin DMP programming and demo: "));
@@ -229,7 +237,7 @@ void setup() {
         Serial.print(devStatus);
         Serial.println(F(")"));
     }
-
+	Serial.println("booo");
     // configure LED for output
     pinMode(LED_PIN, OUTPUT);
 }
@@ -240,13 +248,18 @@ void setup() {
 // ===                    MAIN PROGRAM LOOP                     ===
 // ================================================================
 
-void loop() {
+orientation pullStuff() {
+    Serial.print("we're in pullStuff()");
+    orientation a;
     // if programming failed, don't try to do anything
-    if (!dmpReady) return;
-
+    if (!dmpReady){
+	Serial.print("dmp was not ready\n");	   
+	    return a;
+    }
     // wait for MPU interrupt or extra packet(s) available
-    while (!mpuInterrupt && fifoCount < packetSize) {
+    /*while (!mpuInterrupt && fifoCount < packetSize) {
         // other program behavior stuff here
+	Serial.println("popp");
         // .
         // .
         // .
@@ -256,7 +269,7 @@ void loop() {
         // .
         // .
         // .
-    }
+    }*/
 
     // reset interrupt flag and get INT_STATUS byte
     mpuInterrupt = false;
@@ -274,8 +287,9 @@ void loop() {
     // otherwise, check for DMP data ready interrupt (this should happen frequently)
     } else if (mpuIntStatus & 0x02) {
         // wait for correct available data length, should be a VERY short wait
-        while (fifoCount < packetSize) fifoCount = mpu.getFIFOCount();
-
+        while (fifoCount < packetSize)
+	{	fifoCount = mpu.getFIFOCount();
+	}
         // read a packet from FIFO
         mpu.getFIFOBytes(fifoBuffer, packetSize);
         
@@ -315,10 +329,15 @@ void loop() {
             mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
             Serial.print("ypr\t");
             Serial.print(ypr[0] * 180/M_PI);
+            a.yaw = ypr[0] * 180/M_PI;
             Serial.print("\t");
             Serial.print(ypr[1] * 180/M_PI);
+            a.pitch = ypr[1] * 180/M_PI;
             Serial.print("\t");
             Serial.println(ypr[2] * 180/M_PI);
+            a.roll = ypr[2] * 180/M_PI;
+	        mpu.resetFIFO();
+            return a;
         #endif
 
         #ifdef OUTPUT_READABLE_REALACCEL
