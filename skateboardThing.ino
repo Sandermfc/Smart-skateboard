@@ -1,7 +1,7 @@
 #include "pullDataXG.h"
+#include <math.h>
 
 template<typename Data>
-
 class vector {
   size_t d_size; // Stores no. of actually stored objects
   size_t d_capacity; // Stores allocated capacity
@@ -54,6 +54,9 @@ private:
     d_data = newdata;
   };// Allocates double the old space
 };
+float offSetPitch;
+float offSetYaw;
+float offSetRoll;
 
 const int trigPin1 = 3;
 const int echoPin1 = A3;
@@ -64,6 +67,12 @@ const int pressIn1 = A5;
 const int pressIn2 = A6;
 
 const int marginOfError = 2;
+
+//Baseline orientation (not the same as offset, which is to calibrate at a universal 0 point)
+//These values are used in initialise() to determine if we start on an incline.
+float baseYaw=0;
+float basePitch=0;
+float baseRoll=0;
 
 //pullDataXG.h deals with the accelerometer/gyro pins
 
@@ -85,34 +94,47 @@ struct state
   void getData()
   {
     Serial.println("getData()");
-    
     //get pulse length of 1st ultrasound sensor and convert to distance
-    digitalWrite(trigPin1, LOW);
+    /*digitalWrite(trigPin1, LOW);
     digitalWrite(trigPin1, HIGH);
     digitalWrite(trigPin1, LOW);
-    int duration = pulseIn(echoPin1, HIGH);
+    float duration = pulseIn(echoPin1, HIGH);
     ultraSound[0] = duration/58.2;
     Serial.print("ultraSound1 = ");
     Serial.println(ultraSound[0]);
+    if(ultraSound[2] > 500)
+    {
+      ultraSound[2] = 0;
+    }*/
     
     //get pulse length of 2nd ultrasound sensor and convert to distance
     digitalWrite(trigPin2, LOW);
+    delayMicroseconds(2);
     digitalWrite(trigPin2, HIGH);
+    delayMicroseconds(5);
     digitalWrite(trigPin2, LOW);
-    duration = pulseIn(echoPin2, HIGH);
+    int duration = pulseIn(echoPin2, HIGH);
     ultraSound[1] = duration/58.2;
     Serial.print("ultraSound2 = ");
     Serial.println(ultraSound[1]);
-    
+    if(ultraSound[1] > 500)
+    {
+      ultraSound[1] = 0;
+    }
     //Read the orientation (done directly after ultrasound as we want them to be IDEALLY read at the same time)
     myOrientation = pullStuff(); //yaw - pitch - roll
-    Serial.println(myOrientation.yaw);
-    Serial.println(myOrientation.pitch);
-    Serial.println(myOrientation.roll);
-
-    absoluteHeight1 = calculateHeight1();
-    absoluteHeight2 = calculateHeight2();
-
+    Serial.println(myOrientation.yaw - offSetYaw);
+    Serial.println(myOrientation.pitch - offSetPitch);
+    Serial.println(myOrientation.roll - offSetRoll);
+/*
+    absoluteHeight1 = calculateHeight(0);
+    Serial.print("Absolute height 1 = ");
+    Serial.println(absoluteHeight1);
+    */
+    absoluteHeight2 = calculateHeight(1);
+    Serial.print("Absolute height 2 = ");
+    Serial.println(absoluteHeight2);
+/*
     //if pressure plate 1 is pressed enough, then pressurePlate1 = true
     if(analogRead(pressIn1) == HIGH) //pressure plate 1 pressed?
       pressurePlate1 = true;
@@ -124,18 +146,17 @@ struct state
       pressurePlate2 = true;
     else
       pressurePlate2 = false;
-
-    //TODO, convert to an orientation, these are only accelerations
+*/
   }
-  int calculateHeight1()
+  float calculateHeight(int ultraSoundNum)
   {
-    //TODO
-    return 0; //placeholder
-  }
-  int calculateHeight2()
-  {
-    //TODO
-    return 0;
+    Serial.println("calculateHeight");
+    //TODO, sometimes we do sqrt of a negative value.
+    //Gotta like do absolute value or like 90degrees - the value we got or something. I dont know.
+    Serial.println("ULTRASOUNDSHIT");
+    Serial.println(ultraSound[ultraSoundNum]);
+    
+    return ultraSound[ultraSoundNum]*sqrt(abs(1 - pow(sin(myOrientation.pitch - offSetPitch - basePitch), 2) - pow(sin(myOrientation.roll - offSetRoll - baseRoll), 2)));
   }
 };
 
@@ -149,7 +170,10 @@ boolean firstUltrasound; //0 for the first one, 1 for the other
 boolean firstPressure;   //0 for the first one, 1 for the other
 
 //This helps get a baseline height
-int baseHeight;
+float baseHeight1;
+float baseHeight2;
+
+int maxHeight = 0;
 
 struct node
 {
@@ -199,48 +223,58 @@ struct node
 
 bool initialise()
 {
-  //TODO implement a getHeight function in struct state (take into account orientation and do pythagore to get absolute height
-  int total1;
-  int total2;
-  int average1;
-  int average2;
-  int baseHeight1;
-  int baseHeight2;
+  //these values are substracted from the angle found
+  //this makes it so that when we start on an incline, that point becomes (0,0,0) until the end of the trick.
+  baseYaw = states[frontOfTable-1].myOrientation.yaw; //frontOfTable-1 is the most recently read value.
+  basePitch = states[frontOfTable-1].myOrientation.pitch;
+  baseRoll = states[frontOfTable-1].myOrientation.roll;
   
-  int x = states[0].absoluteHeight1;
-  int y = states[0].absoluteHeight2;
-  int average=x;
-  for(int i=1; i< numSavedStates; i++)
-  {
-    total1+=states[i].absoluteHeight1;
-    total2+=states[i].absoluteHeight2;
-  }
-  average1/=numSavedStates;
-  average2/=numSavedStates;
-  baseHeight1 = average;
-  baseHeight2 = average; 
+  //Get all the data at this instant into a struct
+  state temp;
+  temp.getData();
+  //set the circular tables front to this state (and increment front)
+  states[frontOfTable++] = temp;
+  //set the front of the table
+  frontOfTable%=numSavedStates;
+
+  baseHeight1 = states[frontOfTable-1].absoluteHeight1;
+  baseHeight2 = states[frontOfTable-1].absoluteHeight2;
+  
   return true;
 }
 
 bool frontLift()
 {
-  bool flag1;
-  bool flag2;
+  bool flag1=false;
+  bool flag2=false;
   const int buffer = 2; //TODO, play around with this value to reduce the ammount of false positives
                         //Keeping in mind the margin of error on the ultrasound sensors is approximately +-2
   //check if either of the ultrasound sensors increases abruptly
   for(int i = (frontOfTable+1)%numSavedStates; i!= frontOfTable;++i%numSavedStates)
   {
-    if(states[(i+1)%numSavedStates].absoluteHeight1 < states[i].absoluteHeight1)
+    //pour chaque capteur ultrason, si on decremente d'un etat a un autre: on a pas fait un lift sur ce capteur
+    if(states[(i+1)%numSavedStates].absoluteHeight1 <= states[i].absoluteHeight1)
         flag1 = true;
-    if(states[(i+1)%numSavedStates].absoluteHeight2 < states[i].absoluteHeight2) 
+    if(states[(i+1)%numSavedStates].absoluteHeight2 <= states[i].absoluteHeight2) 
         flag2 = true;
   }    
-  if(flag1 && flag2)
+  if(flag1 && flag2) //si les 2 capteur n'on pas incrementer tout au long return false
     return false;
-  else
+  else //sinon, sauve celui qui a ete lever (ce sera le "devant"), puis return true;
   {
-    if(flag1)
+    if(!flag1 && !flag2) //si les 2 capteur ont incrementer
+    {
+      //si les 2 on augmenter pour une raison ou une autre, alors le "devant" sera celui avec la plus grande hauteur
+      if(states[frontOfTable-1].absoluteHeight1 > states[frontOfTable-1].absoluteHeight2)
+      {
+        firstUltrasound = 0;
+      }
+      else
+      {
+        firstUltrasound = 1;
+      }
+    }
+    if(!flag1) //si ultrason1 est celui qui a incrementer, alors on le sauve comme le "devan"
       firstUltrasound = 0;
     else
       firstUltrasound = 1;
@@ -249,13 +283,39 @@ bool frontLift()
 }
 bool backLift()
 {
-  //the first ultrasound sensor to get "triggered" by frontLift() is saved in the bool global variable "firstUltrasound" (0 for ultraSound[0] and 1 for ultraSound[1])
-  //check to see if the OTHER one passes the height of the first
-  //as in: return true if the height of ultraSound[1] > height of ultraSound[0]
-  //Once it gets there, save the height and use that to calculate the score.
-  //TODO, make sure to do pythagore with the accelerometer to calculate height from the ground and not distance to nearest object like it is now.
-  
-  return false;
+  for(int i = (frontOfTable+1)%numSavedStates; i!= frontOfTable;++i%numSavedStates)
+  {
+    if(firstUltrasound)
+    {
+      if(states[(i+1)%numSavedStates].absoluteHeight1 <= states[i].absoluteHeight1)
+          return false;
+    }
+    else
+    {
+      if(states[(i+1)%numSavedStates].absoluteHeight2 <= states[i].absoluteHeight2) 
+          return false;
+    }
+  }
+  return true;
+}
+
+bool getMaxHeight()
+{
+  if(states[(frontOfTable-1)%numSavedStates].absoluteHeight1 < states[(frontOfTable-2)%numSavedStates].absoluteHeight1 && states[(frontOfTable-1)%numSavedStates].absoluteHeight2 < states[(frontOfTable-2)%numSavedStates].absoluteHeight2)
+  {
+    if(states[(frontOfTable-1)%numSavedStates].absoluteHeight1 > states[(frontOfTable-1)%numSavedStates].absoluteHeight2)
+      maxHeight = states[(frontOfTable-1)%numSavedStates].absoluteHeight1; 
+    else
+      maxHeight = states[(frontOfTable-1)%numSavedStates].absoluteHeight2; 
+  }
+}
+
+bool landed()
+{
+  if(states[(frontOfTable-1)%numSavedStates].absoluteHeight1 < states[(frontOfTable-1)%numSavedStates].absoluteHeight2+1 && states[(frontOfTable-1)%numSavedStates].absoluteHeight1 > states[(frontOfTable-1)%numSavedStates].absoluteHeight2-1)
+  {
+    return true;
+  }
 }
 
 void setup() {
@@ -278,17 +338,46 @@ void setup() {
   //root
   root = (node*) malloc (sizeof(*root)); //create the root node
   Serial.print("3");
-  root->node2(&frontLift);          //pass it the function pointers
+  root->node2(&initialise);          //pass it the function pointers
   Serial.print("5");
+
+  node* onReady = (node*) malloc (sizeof(*onReady));
+  Serial.print("6");
+  root->child.push_back(onReady);
+  Serial.print("7");
+  onReady->node2(&frontLift); //pass it the function pointers
+  Serial.print("8");
   
   //first side of the skateboard has been lifted
   node* oneLifted = (node*) malloc (sizeof(*oneLifted));//create oneLifted node
-  Serial.print("6");
-  root->child.push_back(oneLifted); //0, point root to this node
-  Serial.print("7");
+  Serial.print("9");
+  onReady->child.push_back(oneLifted); //0, point root to this node
+  Serial.print("10");
   oneLifted->node2(&backLift); //pass it the function pointers
+
+  
+  node* bothLifted = (node*) malloc (sizeof(*bothLifted));//create oneLifted node
+  oneLifted->child.push_back(bothLifted);
+  bothLifted->node2(&getMaxHeight);
+
+  node* descending = (node*) malloc (sizeof(*descending));
+  bothLifted->child.push_back(descending);
+  descending->node2(&landed);
+  
   prepareXG(); //calls the initialise function in the pullDataXG.h header
-  //delay(15000);
+  state temp;
+  for(int i =0; i< 100; i++)
+  {
+    temp.getData();
+  }
+  temp.getData();
+  offSetPitch = temp.myOrientation.pitch;
+  offSetRoll = temp.myOrientation.roll;
+  offSetYaw = temp.myOrientation.yaw;
+  Serial.println(offSetPitch);
+  Serial.println(offSetRoll);
+  Serial.println(offSetYaw);
+  delay(5000);
   Serial.println("end of setup");
   
 }
