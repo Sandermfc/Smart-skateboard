@@ -15,15 +15,14 @@ public:
     d_data = (Data *)malloc(d_capacity * sizeof(Data));
     memcpy(d_data, other.d_data, d_size * sizeof(Data));
   }; // Copy constuctor
-  /*void empty()
+  void emptySize()
   {
     d_size = 0;
-    d_capacity = 0;
-    d_data = 0;
-  }*/
+  };
   ~vector() {
     free(d_data);
   }; // Destructor
+  
   vector &operator=(vector const &other) {
     free(d_data);
     d_size = other.d_size;
@@ -33,8 +32,13 @@ public:
     return *this;
   }; // Needed for memory management
   void push_back(Data const &x) {
+    //Serial.print("pushback before");
+    //Serial.println(d_size);
     if (d_capacity == d_size) resize();
+    
     d_data[d_size++] = x;
+    //Serial.print("pushback after");
+    //Serial.println(d_size);
   }; // Adds new value. If needed, allocates more space
   size_t size() const {
     return d_size;
@@ -76,8 +80,9 @@ float baseRoll=0;
 
 //pullDataXG.h deals with the accelerometer/gyro pins
 
-struct state
+class state
 {
+  public:
   int ultraSound[2];            //how to read:
   //pulsein(pinNum, HIGH);
   //Returns the length of time it received a HIGH pulse
@@ -93,7 +98,7 @@ struct state
 
   void getData()
   {
-    Serial.println("getData()");
+   // Serial.println("getData()");
     //get pulse length of 1st ultrasound sensor and convert to distance
     /*digitalWrite(trigPin1, LOW);
     digitalWrite(trigPin1, HIGH);
@@ -115,25 +120,25 @@ struct state
     digitalWrite(trigPin2, LOW);
     int duration = pulseIn(echoPin2, HIGH);
     ultraSound[1] = duration/58.2;
-    Serial.print("ultraSound2 = ");
-    Serial.println(ultraSound[1]);
+    //Serial.print("ultraSound2 = ");
+    //Serial.println(ultraSound[1]);
     if(ultraSound[1] > 500)
     {
       ultraSound[1] = 0;
     }
     //Read the orientation (done directly after ultrasound as we want them to be IDEALLY read at the same time)
     myOrientation = pullStuff(); //yaw - pitch - roll
-    Serial.println(myOrientation.yaw - offSetYaw);
-    Serial.println(myOrientation.pitch - offSetPitch);
-    Serial.println(myOrientation.roll - offSetRoll);
+    //Serial.println(myOrientation.yaw - offSetYaw);
+    //Serial.println(myOrientation.pitch - offSetPitch);
+    //Serial.println(myOrientation.roll - offSetRoll);
 /*
     absoluteHeight1 = calculateHeight(0);
     Serial.print("Absolute height 1 = ");
     Serial.println(absoluteHeight1);
     */
     absoluteHeight2 = calculateHeight(1);
-    Serial.print("Absolute height 2 = ");
-    Serial.println(absoluteHeight2);
+    //Serial.print("Absolute height 2 = ");
+    //Serial.println(absoluteHeight2);
 /*
     //if pressure plate 1 is pressed enough, then pressurePlate1 = true
     if(analogRead(pressIn1) == HIGH) //pressure plate 1 pressed?
@@ -147,17 +152,17 @@ struct state
     else
       pressurePlate2 = false;
 */
-  }
+  };
   float calculateHeight(int ultraSoundNum)
   {
-    Serial.println("calculateHeight");
+    //Serial.println("calculateHeight");
     //TODO, sometimes we do sqrt of a negative value.
     //Gotta like do absolute value or like 90degrees - the value we got or something. I dont know.
-    Serial.println("ULTRASOUNDSHIT");
-    Serial.println(ultraSound[ultraSoundNum]);
+    //Serial.println("ULTRASOUNDSHIT");
+    //Serial.println(ultraSound[ultraSoundNum]);
     
     return ultraSound[ultraSoundNum]*sqrt(abs(1 - pow(sin(myOrientation.pitch - offSetPitch - basePitch), 2) - pow(sin(myOrientation.roll - offSetRoll - baseRoll), 2)));
-  }
+  };
 };
 
 
@@ -175,24 +180,34 @@ float baseHeight2;
 
 int maxHeight = 0;
 
-struct node
+class node
 {
+  public:
   vector<node*> child;
   vector<bool(*)()> tests;
   node() {
-  }
+  };
   void node2(bool(*f)())
   {
-    this->tests.push_back(f);
-  }
+    tests.emptySize();
+    Serial.print("btests.size() = ");
+      Serial.println(tests.size());
+    tests.push_back(f);
+    Serial.print("atests.size() = ");
+      Serial.println(tests.size());
+  };
   void node3(vector<bool(*)()> listOfTests)
   {
     //Serial.print("before");
     tests = listOfTests;
     //Serial.print("After");
-  }
+  };
   int test()
   {
+
+      Serial.println("Test()");
+      Serial.print("tests.size() = ");
+      Serial.print(tests.size());
       for (int i = 0; i < tests.size(); i++)
       {
         bool funcVal = tests[i]();
@@ -202,7 +217,6 @@ struct node
           Serial.print((int)i);
           Serial.println(" Worked fine");
           return i; //test i returned true;
-
         }
         else
         {
@@ -212,22 +226,26 @@ struct node
         }
       }
       return -1; //none are true;
-  }
+  };
   node* getChild(int childNumber)
   {
-    return child[childNumber];
-  }
+    if(childNumber < child.size())
+      return child[childNumber];
+    else
+      return NULL;
+  };
 }
 *root;
 
 
 bool initialise()
 {
+  Serial.println("initialise()");
   //these values are substracted from the angle found
   //this makes it so that when we start on an incline, that point becomes (0,0,0) until the end of the trick.
-  baseYaw = states[frontOfTable-1].myOrientation.yaw; //frontOfTable-1 is the most recently read value.
-  basePitch = states[frontOfTable-1].myOrientation.pitch;
-  baseRoll = states[frontOfTable-1].myOrientation.roll;
+  baseYaw = states[(frontOfTable-1)%numSavedStates].myOrientation.yaw; //frontOfTable-1 is the most recently read value.
+  basePitch = states[(frontOfTable-1)%numSavedStates].myOrientation.pitch;
+  baseRoll = states[(frontOfTable-1)%numSavedStates].myOrientation.roll;
   
   //Get all the data at this instant into a struct
   state temp;
@@ -237,9 +255,9 @@ bool initialise()
   //set the front of the table
   frontOfTable%=numSavedStates;
 
-  baseHeight1 = states[frontOfTable-1].absoluteHeight1;
-  baseHeight2 = states[frontOfTable-1].absoluteHeight2;
-  
+  baseHeight1 = states[(frontOfTable-1)%numSavedStates].absoluteHeight1;
+  baseHeight2 = states[(frontOfTable-1)%numSavedStates].absoluteHeight2;
+  Serial.println("Initialise returned true");
   return true;
 }
 
@@ -279,6 +297,7 @@ bool frontLift()
     else
       firstUltrasound = 1;
   }
+  Serial.println("frontLift returned true");
  return true;
 }
 bool backLift()
@@ -296,6 +315,7 @@ bool backLift()
           return false;
     }
   }
+  Serial.println("backLift returned true");
   return true;
 }
 
@@ -304,19 +324,31 @@ bool getMaxHeight()
   if(states[(frontOfTable-1)%numSavedStates].absoluteHeight1 < states[(frontOfTable-2)%numSavedStates].absoluteHeight1 && states[(frontOfTable-1)%numSavedStates].absoluteHeight2 < states[(frontOfTable-2)%numSavedStates].absoluteHeight2)
   {
     if(states[(frontOfTable-1)%numSavedStates].absoluteHeight1 > states[(frontOfTable-1)%numSavedStates].absoluteHeight2)
+    {
       maxHeight = states[(frontOfTable-1)%numSavedStates].absoluteHeight1; 
+    }
     else
+    {
       maxHeight = states[(frontOfTable-1)%numSavedStates].absoluteHeight2; 
+    }
+    Serial.print("getMaxHeight returned true with ");
+    Serial.println(maxHeight);
+    return true;
   }
+  return false;
 }
 
 bool landed()
 {
   if(states[(frontOfTable-1)%numSavedStates].absoluteHeight1 < states[(frontOfTable-1)%numSavedStates].absoluteHeight2+1 && states[(frontOfTable-1)%numSavedStates].absoluteHeight1 > states[(frontOfTable-1)%numSavedStates].absoluteHeight2-1)
   {
+    Serial.print("Landed is true");
     return true;
   }
+  return false;
 }
+
+node* curr = root;
 
 void setup() {
   //Baud and pin setup
@@ -377,12 +409,10 @@ void setup() {
   Serial.println(offSetPitch);
   Serial.println(offSetRoll);
   Serial.println(offSetYaw);
-  delay(5000);
+  
   Serial.println("end of setup");
   
 }
-
-node* curr = root;
 
 void loop() {
   //Serial.println("Start of loop");
@@ -399,10 +429,16 @@ void loop() {
   int nextChild = curr->test();
   if(nextChild != -1)
   {
+    Serial.println("1Something returned true");
     curr = curr->getChild(nextChild);
+    if(curr == NULL)
+      curr = root;
   }
   else
   {
+    Serial.println("2Something returned false");
+    curr = root; //retourne au debut
+    Serial.println("shit");
     //Serial.println("All of the tests returned false.");
   }
 }
