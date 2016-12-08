@@ -146,8 +146,6 @@ struct orientation
   int yaw;
   int roll;
   int pitch;
-  
-  
 };
 
 
@@ -170,9 +168,9 @@ void prepareXG() {
     // join I2C bus (I2Cdev library doesn't do this automatically)
     #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
         Wire.begin();
-        TWBR = 24; // 400kHz I2C clock (200kHz if CPU is 8MHz)
+        TWBR = 12; // 400kHz I2C clock (200kHz if CPU is 8MHz)
     #elif I2CDEV_IMPLEMENTATION == I2CDEV_BUILTIN_FASTWIRE
-        Fastwire::setup(400, true);
+        Fastwire::setup(400, true); //TODO
     #endif
 
     // initialize serial communication
@@ -237,7 +235,6 @@ void prepareXG() {
         Serial.print(devStatus);
         Serial.println(F(")"));
     }
-	Serial.println("booo");
     // configure LED for output
     pinMode(LED_PIN, OUTPUT);
 }
@@ -249,11 +246,10 @@ void prepareXG() {
 // ================================================================
 
 orientation pullStuff() {
-    Serial.print("we're in pullStuff()");
     orientation a;
     // if programming failed, don't try to do anything
     if (!dmpReady){
-	Serial.print("dmp was not ready\n");	   
+	Serial.print(F("dmp was not ready\n"));	   
 	    return a;
     }
     // wait for MPU interrupt or extra packet(s) available
@@ -270,14 +266,11 @@ orientation pullStuff() {
         // .
         // .
     }*/
-
     // reset interrupt flag and get INT_STATUS byte
     mpuInterrupt = false;
     mpuIntStatus = mpu.getIntStatus();
-
     // get current FIFO count
     fifoCount = mpu.getFIFOCount();
-
     // check for overflow (this should never happen unless our code is too inefficient)
     if ((mpuIntStatus & 0x10) || fifoCount == 1024) {
         // reset so we can continue cleanly
@@ -300,13 +293,13 @@ orientation pullStuff() {
         #ifdef OUTPUT_READABLE_QUATERNION
             // display quaternion values in easy matrix form: w x y z
             mpu.dmpGetQuaternion(&q, fifoBuffer);
-            Serial.print("quat\t");
+	    Serial.print(F("quat\t"));
             Serial.print(q.w);
-            Serial.print("\t");
+            Serial.print(F("\t"));
             Serial.print(q.x);
-            Serial.print("\t");
+            Serial.print(F("\t"));
             Serial.print(q.y);
-            Serial.print("\t");
+            Serial.print(F("\t"));
             Serial.println(q.z);
         #endif
 
@@ -314,11 +307,11 @@ orientation pullStuff() {
             // display Euler angles in degrees
             mpu.dmpGetQuaternion(&q, fifoBuffer);
             mpu.dmpGetEuler(euler, &q);
-            Serial.print("euler\t");
+            Serial.print(F("euler\t"));
             Serial.print(euler[0] * 180/M_PI);
-            Serial.print("\t");
+            Serial.print(F("\t"));
             Serial.print(euler[1] * 180/M_PI);
-            Serial.print("\t");
+            Serial.print(F("\t"));
             Serial.println(euler[2] * 180/M_PI);
         #endif
 
@@ -327,16 +320,16 @@ orientation pullStuff() {
             mpu.dmpGetQuaternion(&q, fifoBuffer);
             mpu.dmpGetGravity(&gravity, &q);
             mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
-            Serial.print("ypr\t");
-            Serial.print(ypr[0] * 180/M_PI);
+            //Serial.print("ypr\t");
+            //Serial.print(ypr[0] * 180/M_PI);
             a.yaw = ypr[0] * 180/M_PI;
-            Serial.print("\t");
-            Serial.print(ypr[1] * 180/M_PI);
+            //Serial.print("\t");
+            //Serial.print(ypr[1] * 180/M_PI);
             a.pitch = ypr[1] * 180/M_PI;
-            Serial.print("\t");
-            Serial.println(ypr[2] * 180/M_PI);
+            //Serial.print("\t");
+            //Serial.println(ypr[2] * 180/M_PI);
             a.roll = ypr[2] * 180/M_PI;
-	        mpu.resetFIFO();
+	    mpu.resetFIFO(); //TODO, important?
             return a;
         #endif
 
@@ -346,11 +339,11 @@ orientation pullStuff() {
             mpu.dmpGetAccel(&aa, fifoBuffer);
             mpu.dmpGetGravity(&gravity, &q);
             mpu.dmpGetLinearAccel(&aaReal, &aa, &gravity);
-            Serial.print("areal\t");
+            Serial.print(F("areal\t"));
             Serial.print(aaReal.x);
-            Serial.print("\t");
+            Serial.print(F("\t"));
             Serial.print(aaReal.y);
-            Serial.print("\t");
+            Serial.print(F("\t"));
             Serial.println(aaReal.z);
         #endif
 
@@ -362,18 +355,18 @@ orientation pullStuff() {
             mpu.dmpGetGravity(&gravity, &q);
             mpu.dmpGetLinearAccel(&aaReal, &aa, &gravity);
             mpu.dmpGetLinearAccelInWorld(&aaWorld, &aaReal, &q);
-            Serial.print("aworld\t");
+            Serial.print(F("aworld\t"));
             Serial.print(aaWorld.x);
-            Serial.print("\t");
+            Serial.print(F("\t"));
             Serial.print(aaWorld.y);
-            Serial.print("\t");
+            Serial.print(F("\t"));
             Serial.println(aaWorld.z);
         #endif
     
         #ifdef OUTPUT_TEAPOT
             // display quaternion values in InvenSense Teapot demo format:
             teapotPacket[2] = fifoBuffer[0];
-            teapotPacket[3] = fifoBuffer[1];
+            teapotPacket[3] = fifoBuffer[2];
             teapotPacket[4] = fifoBuffer[4];
             teapotPacket[5] = fifoBuffer[5];
             teapotPacket[6] = fifoBuffer[8];
