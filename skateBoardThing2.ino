@@ -1,63 +1,6 @@
 #include "pullDataXG.h"
 #include <math.h>
 
-template<typename Data>
-class vector {
-  size_t d_size; // Stores no. of actually stored objects
-  size_t d_capacity; // Stores allocated capacity
-  Data *d_data; // Stores data
-public:
-  vector() : 
-  d_size(0), d_capacity(0), d_data(0) {
-  } // Default constructor
-  vector(vector const &other) : 
-  d_size(other.d_size), d_capacity(other.d_capacity), d_data(0) {
-    d_data = (Data *)malloc(d_capacity * sizeof(Data));
-    memcpy(d_data, other.d_data, d_size * sizeof(Data));
-  } // Copy constuctor
-  void emptySize()
-  {
-    d_size = 0;
-  }
-  ~vector() {
-    free(d_data);
-  } // Destructor
-  
-  vector &operator=(vector const &other) {
-    free(d_data);
-    d_size = other.d_size;
-    d_capacity = other.d_capacity;
-    d_data = (Data *)malloc(d_capacity * sizeof(Data));
-    memcpy(d_data, other.d_data, d_size * sizeof(Data));
-    return *this;
-  } // Needed for memory management
-  void push_back(Data const &x) {
-    //Serial.print("pushback before");
-    //Serial.println(d_size);
-    if (d_capacity == d_size) resize();
-    
-    d_data[d_size++] = x;
-    //Serial.print("pushback after");
-    //Serial.println(d_size);
-  } // Adds new value. If needed, allocates more space
-  size_t size() const {
-    return d_size;
-  } // Size getter
-  Data const &operator[](size_t idx) const {
-    return d_data[idx];
-  } // Const getter
-  Data &operator[](size_t idx) {
-    return d_data[idx];
-  } // Changeable getter
-private:
-  void resize() {
-    d_capacity = d_capacity ? d_capacity * 2 : 1;
-    Data *newdata = (Data *)malloc(d_capacity * sizeof(Data));
-    memcpy(newdata, d_data, d_size * sizeof(Data));
-    free(d_data);
-    d_data = newdata;
-  }// Allocates double the old space
-};
 int offSetPitch;
 int offSetYaw;
 int offSetRoll;
@@ -100,17 +43,17 @@ class state
   {
    // Serial.println("getData()");
     //get pulse length of 1st ultrasound sensor and convert to distance
-    /*digitalWrite(trigPin1, LOW);
+    digitalWrite(trigPin1, LOW);
+    delayMicroseconds(2);
     digitalWrite(trigPin1, HIGH);
+    delayMicroseconds(5);
     digitalWrite(trigPin1, LOW);
     int duration = pulseIn(echoPin1, HIGH);
     ultraSound[0] = duration/58.2;
-    Serial.print("ultraSound1 = ");
-    Serial.println(ultraSound[0]);
-    if(ultraSound[2] > 500)
+    if(ultraSound[0] > 500)
     {
-      ultraSound[2] = 0;
-    }*/
+      ultraSound[0] = 0;
+    }
     
     //get pulse length of 2nd ultrasound sensor and convert to distance
     digitalWrite(trigPin2, LOW);
@@ -118,27 +61,17 @@ class state
     digitalWrite(trigPin2, HIGH);
     delayMicroseconds(5);
     digitalWrite(trigPin2, LOW);
-    int duration = pulseIn(echoPin2, HIGH);
+    duration = pulseIn(echoPin2, HIGH);
     ultraSound[1] = duration/58.2;
-    //Serial.print("ultraSound2 = ");
-    //Serial.println(ultraSound[1]);
     if(ultraSound[1] > 500)
     {
       ultraSound[1] = 0;
     }
     //Read the orientation (done directly after ultrasound as we want them to be IDEALLY read at the same time)
     myOrientation = pullStuff(); //yaw - pitch - roll
-    //Serial.println(myOrientation.yaw - offSetYaw);
-    //Serial.println(myOrientation.pitch - offSetPitch);
-    //Serial.println(myOrientation.roll - offSetRoll);
-/*
-    absoluteHeight1 = calculateHeight(0);
-    Serial.print("Absolute height 1 = ");
-    Serial.println(absoluteHeight1);
-    */
+
+    absoluteHeight1 = calculateHeight(0);  
     absoluteHeight2 = calculateHeight(1);
-    //Serial.print("Absolute height 2 = ");
-    //Serial.println(absoluteHeight2);
 /*
     //if pressure plate 1 is pressed enough, then pressurePlate1 = true
     if(analogRead(pressIn1) == HIGH) //pressure plate 1 pressed?
@@ -155,16 +88,9 @@ class state
   }
   int calculateHeight(int ultraSoundNum)
   {
-    //Serial.println("calculateHeight");
-    //TODO, sometimes we do sqrt of a negative value.
-    //Gotta like do absolute value or like 90degrees - the value we got or something. I dont know.
-    //Serial.println("ULTRASOUNDSHIT");
-    //Serial.println(ultraSound[ultraSoundNum]);
-    
     return ultraSound[ultraSoundNum]*sqrt(abs(1 - pow(sin(myOrientation.pitch - offSetPitch - basePitch), 2) - pow(sin(myOrientation.roll - offSetRoll - baseRoll), 2)));
   }
 };
-
 
 const int numSavedStates = 10;
 state states[numSavedStates];
@@ -172,7 +98,7 @@ int frontOfTable = 0;
 
 //This helps to see which of the two sensors is triggered first (so which is the front/back)
 bool firstUltrasound; //0 for the first one, 1 for the other
-bool firstPressure;   //0 for the first one, 1 for the other
+//bool firstPressure;   //0 for the first one, 1 for the other
 
 //This helps get a baseline height
 int baseHeight1;
@@ -184,7 +110,7 @@ typedef bool(*functor)(void);
 
 bool initialise()
 {
-  /*Serial.println(F("ini"));
+  Serial.println(F("ini"));
   //these values are substracted from the angle found
   //this makes it so that when we start on an incline, that point becomes (0,0,0) until the end of the trick.
   baseYaw = states[(frontOfTable-1)%numSavedStates].myOrientation.yaw; //frontOfTable-1 is the most recently read value.
@@ -203,7 +129,7 @@ bool initialise()
 
   baseHeight1 = states[(frontOfTable-1)%numSavedStates].absoluteHeight1;
   baseHeight2 = states[(frontOfTable-1)%numSavedStates].absoluteHeight2;
-  //Serial.println("Initialise returned true");/*/
+  Serial.println(F("Initialise returned true"));
   return true;
 }
 
@@ -215,19 +141,34 @@ bool frontLift()
   const int buffer = 2; //TODO, play around with this value to reduce the ammount of false positives
                         //Keeping in mind the margin of error on the ultrasound sensors is approximately +-2
   //check if either of the ultrasound sensors increases abruptly
-  for(int i = (frontOfTable+1)%numSavedStates; i!= frontOfTable;++i,i%=numSavedStates)
+  Serial.print(F("absoluteHeight1 = "));
+  Serial.println(states[(frontOfTable)%numSavedStates].absoluteHeight1);
+  if((states[(frontOfTable+1)%numSavedStates].absoluteHeight1)+5 < (states[frontOfTable].absoluteHeight1)-5){
+    flag1 = true;
+    Serial.println(states[frontOfTable].absoluteHeight1);
+    Serial.println(states[(frontOfTable+1)%numSavedStates].absoluteHeight1);
+    Serial.println(F("flag1 true"));
+    }
+  if((states[(frontOfTable+1)%numSavedStates].absoluteHeight2)+5 < (states[frontOfTable].absoluteHeight2)-5){
+    flag2 = true;
+    Serial.println(states[frontOfTable].absoluteHeight2);
+    Serial.println(states[(frontOfTable+1)%numSavedStates].absoluteHeight2);
+    Serial.println(F("flag2 true"));
+  }
+  /*for(int i = (frontOfTable+1)%numSavedStates; i!= frontOfTable;++i,i%=numSavedStates)
   {
+    Serial.print(F("Abrupt"))
     //pour chaque capteur ultrason, si on decremente d'un etat a un autre: on a pas fait un lift sur ce capteur
     if(states[(i+1)%numSavedStates].absoluteHeight1 <= states[i].absoluteHeight1)
         flag1 = true;
     if(states[(i+1)%numSavedStates].absoluteHeight2 <= states[i].absoluteHeight2) 
         flag2 = true;
-  }    
-  if(flag1 && flag2) //si les 2 capteur n'on pas incrementer tout au long return false
+  }    */
+  if(!flag1 && !flag2) //si les 2 capteur n'on pas incrementer tout au long return false
     return false;
   else //sinon, sauve celui qui a ete lever (ce sera le "devant"), puis return true;
   {
-    if(!flag1 && !flag2) //si les 2 capteur ont incrementer
+    if(flag1 && flag2) //si les 2 capteur ont incrementer
     {
       //si les 2 on augmenter pour une raison ou une autre, alors le "devant" sera celui avec la plus grande hauteur
       if(states[(frontOfTable-1)%numSavedStates].absoluteHeight1 > states[(frontOfTable-1)%numSavedStates].absoluteHeight2)
@@ -239,37 +180,59 @@ bool frontLift()
         firstUltrasound = 1;
       }
     }
-    else if(!flag1) //si ultrason1 est celui qui a incrementer, alors on le sauve comme le "devan"
+    else if(flag1) //si ultrason1 est celui qui a incrementer, alors on le sauve comme le "devant"
       firstUltrasound = 0;
     else
       firstUltrasound = 1;
   }
-  //Serial.println("frontLift returned true");
+  Serial.println("frontLift returned true");
+  
+  //delay(5000);
  return true;
 }
 bool backLift()
 {
   Serial.println(F("BACK"));
-  for(int i = (frontOfTable+1)%numSavedStates; i!= frontOfTable;++i,i%=numSavedStates)
+  int av1 = 0;
+  int av2 = 0;
+  
+  
+  
+  if(!firstUltrasound)//if first to lift was 2 check abs height 1
   {
-    if(firstUltrasound)
+    for(int i = (frontOfTable+1)%numSavedStates; i != (frontOfTable+1+numSavedStates/2)%numSavedStates; i++,i%=numSavedStates )
     {
-      if(states[(i+1)%numSavedStates].absoluteHeight1 <= states[i].absoluteHeight1)
-          return false;
+      av1+=states[i].absoluteHeight1;
     }
-    else
+    for(int i = (frontOfTable+6)%numSavedStates; i != frontOfTable; i++,i%=numSavedStates)
     {
-      if(states[(i+1)%numSavedStates].absoluteHeight2 <= states[i].absoluteHeight2) 
-          return false;
+      av2+=states[i].absoluteHeight1;
     }
   }
-  //Serial.println("backLift returned true");
-  return true;
+  else
+  {
+    for(int i = (frontOfTable+1)%numSavedStates; i != (frontOfTable+1+numSavedStates/2)%numSavedStates; i++,i%=numSavedStates )
+    {
+      av1+=states[i].absoluteHeight2;
+    }
+    for(int i = (frontOfTable+6)%numSavedStates; i != frontOfTable; i++,i%=numSavedStates)
+    {
+      av2+=states[i].absoluteHeight2;
+    }
+  }
+  if(av1 < av2){
+    Serial.println(F("back return true"));
+    delay(5000);
+    return true;
+  }
+  Serial.println("backLift returned false");
+  return false;
 }
 
 bool getMaxHeight()
 {
   Serial.println(F("HEIGHT"));
+  
   if(states[(frontOfTable-1)%numSavedStates].absoluteHeight1 < states[(frontOfTable-2)%numSavedStates].absoluteHeight1 && states[(frontOfTable-1)%numSavedStates].absoluteHeight2 < states[(frontOfTable-2)%numSavedStates].absoluteHeight2)
   {
     if(states[(frontOfTable-1)%numSavedStates].absoluteHeight1 > states[(frontOfTable-1)%numSavedStates].absoluteHeight2)
@@ -302,16 +265,15 @@ class node
 
 {
   public:
-  vector<node*> child;
-  vector<functor> tests;
-  functor arr[5];
+  node* child[10];
+  functor arr[10];
   int sizeOf;
+  int sizeOfC;
   node(){
   }
   void node1() {
     sizeOf = 0;
-    tests.emptySize();
-    child.emptySize();
+    sizeOfC = 0;
   }
   void node2(functor f)
   {
@@ -322,6 +284,11 @@ class node
     //tests.push_back(f);
     //Serial.print(F("Bsize = "));
     //Serial.println(tests.size());
+  }
+  void pushChild(node* c)
+  {
+    child[sizeOfC] = c;
+    sizeOfC++;
   }
   int test()
   {
@@ -352,7 +319,7 @@ class node
   }
   node* getChild(int childNumber)
   {
-    if(childNumber < child.size())
+    if(childNumber < sizeOfC)
     {
       //Serial.println((int)child[childNumber]);
       return child[childNumber];
@@ -380,10 +347,6 @@ void setup() {
   pinMode(echoPin2, INPUT);
   pinMode(pressIn1, INPUT);
   pinMode(pressIn2, INPUT);
-
- functor b;
- b = initialise;
- Serial.println(b());
   
   //create decision tree
   
@@ -395,23 +358,23 @@ void setup() {
   root->node2(initialise);          //pass it the function pointers
   Serial.print(F("5"));
 
-  /*node* onReady = (node*) malloc (sizeof(*onReady));
-  //Serial.print("6");
-  root->child.push_back(onReady);
-  //Serial.print("7");
+  node* onReady = (node*) malloc (sizeof(*onReady));
+  Serial.print("6");
+  root->pushChild(onReady);
+  Serial.print("7");
   onReady->node1();
-  onReady->node2(&frontLift); //pass it the function pointers
-  //Serial.print("8");
+  onReady->node2(frontLift); //pass it the function pointers
+  Serial.print("8");
   
   //first side of the skateboard has been lifted
   node* oneLifted = (node*) malloc (sizeof(*oneLifted));//create oneLifted node
-  //Serial.print("9");
-  onReady->child.push_back(oneLifted); //0, point root to this node
-  //Serial.println("10");
+  Serial.print("9");
+  onReady->pushChild(oneLifted); //0, point root to this node
+  Serial.println("10");
   oneLifted->node1();
-  oneLifted->node2(&backLift); //pass it the function pointers
-
-  
+  oneLifted->node2(backLift); //pass it the function pointers
+  Serial.println("10");
+/*
   node* bothLifted = (node*) malloc (sizeof(*bothLifted));//create oneLifted node
   oneLifted->child.push_back(bothLifted);
   bothLifted->node1();
@@ -426,15 +389,14 @@ void setup() {
   state temp;
   for(int i =0; i< 100; i++)
   {
+    Serial.print(i);
     temp.getData();
   }
+  delay(2000);
   temp.getData();
   offSetPitch = temp.myOrientation.pitch;
   offSetRoll = temp.myOrientation.roll;
   offSetYaw = temp.myOrientation.yaw;
-  //Serial.println(offSetPitch);
-  //Serial.println(offSetRoll);
-  //Serial.println(offSetYaw);
   
   //Serial.println(F("end of setup"));
   curr = root;
@@ -470,7 +432,7 @@ void loop() {
   }
   else
   {
-    //Serial.println("2Something returned false");
+    Serial.println(F("2Something returned false"));
     curr = root; //retourne au debut
     //Serial.println("All of the tests returned false.");
   }
