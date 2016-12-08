@@ -72,6 +72,8 @@ class state
 
     absoluteHeight1 = calculateHeight(0);  
     absoluteHeight2 = calculateHeight(1);
+    Serial.print(absoluteHeight1);
+    Serial.print(absoluteHeight2);
 /*
     //if pressure plate 1 is pressed enough, then pressurePlate1 = true
     if(analogRead(pressIn1) == HIGH) //pressure plate 1 pressed?
@@ -92,7 +94,7 @@ class state
   }
 };
 
-const int numSavedStates = 10;
+const int numSavedStates = 6;
 state states[numSavedStates];
 int frontOfTable = 0;
 
@@ -143,13 +145,13 @@ bool frontLift()
   //check if either of the ultrasound sensors increases abruptly
   Serial.print(F("absoluteHeight1 = "));
   Serial.println(states[(frontOfTable)%numSavedStates].absoluteHeight1);
-  if((states[(frontOfTable+1)%numSavedStates].absoluteHeight1)+5 < (states[frontOfTable].absoluteHeight1)-5){
+  if((states[(frontOfTable+1)%numSavedStates].absoluteHeight1)+3 < (states[frontOfTable].absoluteHeight1)-3){
     flag1 = true;
     Serial.println(states[frontOfTable].absoluteHeight1);
     Serial.println(states[(frontOfTable+1)%numSavedStates].absoluteHeight1);
     Serial.println(F("flag1 true"));
     }
-  if((states[(frontOfTable+1)%numSavedStates].absoluteHeight2)+5 < (states[frontOfTable].absoluteHeight2)-5){
+  if((states[(frontOfTable+1)%numSavedStates].absoluteHeight2+3) < (states[frontOfTable].absoluteHeight2)-3){
     flag2 = true;
     Serial.println(states[frontOfTable].absoluteHeight2);
     Serial.println(states[(frontOfTable+1)%numSavedStates].absoluteHeight2);
@@ -185,9 +187,9 @@ bool frontLift()
     else
       firstUltrasound = 1;
   }
-  Serial.println("frontLift returned true");
+  Serial.println("---------------------------------------------------------------------------------------------------");
   
-  //delay(5000);
+  
  return true;
 }
 bool backLift()
@@ -196,34 +198,23 @@ bool backLift()
   int av1 = 0;
   int av2 = 0;
   
-  
-  
   if(!firstUltrasound)//if first to lift was 2 check abs height 1
   {
-    for(int i = (frontOfTable+1)%numSavedStates; i != (frontOfTable+1+numSavedStates/2)%numSavedStates; i++,i%=numSavedStates )
+    if((states[(frontOfTable+1)%numSavedStates].absoluteHeight1) < (states[frontOfTable].absoluteHeight1)-1)
     {
-      av1+=states[i].absoluteHeight1;
-    }
-    for(int i = (frontOfTable+6)%numSavedStates; i != frontOfTable; i++,i%=numSavedStates)
-    {
-      av2+=states[i].absoluteHeight1;
+      Serial.println(F("back return true"));
+      delay(1000);
+      return true;
     }
   }
   else
   {
-    for(int i = (frontOfTable+1)%numSavedStates; i != (frontOfTable+1+numSavedStates/2)%numSavedStates; i++,i%=numSavedStates )
+    if((states[(frontOfTable+1)%numSavedStates].absoluteHeight2) < (states[frontOfTable].absoluteHeight2)-1)
     {
-      av1+=states[i].absoluteHeight2;
+      Serial.println(F("back return true"));
+      delay(1000);
+      return true;
     }
-    for(int i = (frontOfTable+6)%numSavedStates; i != frontOfTable; i++,i%=numSavedStates)
-    {
-      av2+=states[i].absoluteHeight2;
-    }
-  }
-  if(av1 < av2){
-    Serial.println(F("back return true"));
-    delay(5000);
-    return true;
   }
   Serial.println("backLift returned false");
   return false;
@@ -429,6 +420,14 @@ void loop() {
       curr = root;
       Serial.println(F("Got to a leaf node, going back to root"));
     }
+    /*for(int i = (frontOfTable+1)%numSavedStates; i != frontOfTable; i++,i%=numSavedStates)//get brand new value after test==true
+    {
+      temp.getData();
+      states[i] = temp;
+    }*/
+    temp.getData();
+    states[frontOfTable++] = temp;
+    frontOfTable%=numSavedStates;
   }
   else
   {
