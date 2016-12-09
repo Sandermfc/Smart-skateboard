@@ -366,7 +366,7 @@ orientation pullStuff() {
         #ifdef OUTPUT_TEAPOT
             // display quaternion values in InvenSense Teapot demo format:
             teapotPacket[2] = fifoBuffer[0];
-            teapotPacket[3] = fifoBuffer[2];
+            teapotPacket[3] = fifoBuffer[1];
             teapotPacket[4] = fifoBuffer[4];
             teapotPacket[5] = fifoBuffer[5];
             teapotPacket[6] = fifoBuffer[8];
