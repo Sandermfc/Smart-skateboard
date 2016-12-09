@@ -1,5 +1,0 @@
-
-06-12-16
-1. Inside the .ino file:
-  - Anytime we use states[i+1] or i-1
-    we need to add a (i+1)%numberOfSavedStates to make sure we dont go outside our bounds.
