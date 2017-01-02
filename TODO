@@ -1,0 +1,2 @@
+- Get height values accurately using accel/gyro instead of with ultrasound sensors
+- Output to bluetooth (find a library that doesnt interfere with "math.h"
