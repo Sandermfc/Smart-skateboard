@@ -1,0 +1,35 @@
+cleaning up:
+  - remove everything related to ultrasounds
+  - all the const pin declarations
+  - anything that does stuff for it in the setup
+  - everything inside the state class
+  - are there any #includes for it?
+  - remove the function to calculate the height based off of ultrasound values
+  - REDO that function using acceleration (we havent set those up yet)
+Get acceleration values
+  - Inside PullDataXG.h, gonna need to uncomment line 113 //#define OUTPUT_READABLE_WORLDACCEL
+  - make a new struct to hold acceleration values
+  - make a new struct to hold acceleration values and orientation values
+  - make pullData() return this new struct (called allData or something)
+  - Further down, where OUTPUT_READABLE_WORLDACCEL is used (approx 360), make a new instance of an acceleration struct and populate it with acceleration values
+  - at the end of pullData(), populate a new allData struct with the orientation values and acceleration values
+  
+  - Back in the regular .ino file, getData() needs to call pullData() and keep that value in an allData struct
+  - THATS ALL THE DATA WE NEED FOR EACH STATE, simply put:
+    - orientation
+      - yaw
+      - pitch
+      - roll
+    - acceleration
+      - x
+      - y
+      - z
+- Get absolute height from acceleration values now instead of using ultrasound (which have been removed)
+
+- Maybe thats good enough ? Just keep the height variables as is and use those for the functions already there.
+
+- HOWEVER, we may want to change the way data is read (only pullData() when we want to read instead of every tick)
+
+- if so, maybe omit the height variables inside of each state and only calculate the height when we want?
+
+- even then we might be able to get away with how it sorta works now.
