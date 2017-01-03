@@ -6,89 +6,84 @@ int offSetYaw;
 int offSetRoll;
 int counter = 0; // do functions this number of times unti give true
 
-const int trigPin1 = 3; //ultrasound 1
-const int echoPin1 = A3;
-const int trigPin2 = 4; //ultrasound 2
-const int echoPin2 = A4;
-
-const int pressIn1 = A5;
-const int pressIn2 = A6;
-
 //Baseline orientation (not the same as offset, which is to calibrate at a universal 0 point)
 //These values are used in initialise() to determine if we start on an incline.
 int baseYaw=0;
 int basePitch=0;
 int baseRoll=0;
 
-//pullDataXG.h deals with the accelerometer/gyro pins
+float maxHeight = 0;
+float currentHeight = 0;
+int frontLiftAngle = 40;
 
+//pullDataXG.h deals with the accelerometer/gyro pins
+int frontOfTable = 0; // newest value in table
+float calculateVelocity(int pos);
+float addToHeight(int pos);
 class state
 {
   public:
-  int ultraSound[2];
+  //int ultraSound[2];
   orientation myOrientation;  //xyz coordinates
+  acceleration myAcceleration;
   int absoluteHeight1;
   int absoluteHeight2;
-
+  float velocity; //velocity (speed) in the y  (upward) axis only
+  unsigned long t;
   //more stuff for gyroscope?
 
   void getData()
   {
-    //get pulse length of 1st ultrasound sensor and convert to distance
-    digitalWrite(trigPin1, LOW);
-    delayMicroseconds(2);
-    digitalWrite(trigPin1, HIGH);
-    delayMicroseconds(5);
-    digitalWrite(trigPin1, LOW);
-    int duration = pulseIn(echoPin1, HIGH); //get raw value
-    ultraSound[0] = duration/58.2;//calculate distance with the ultrasound raw value
-    if(ultraSound[0] > 300) // if over 300, faulty value
-    {
-      ultraSound[0] = 0;
-    }
+    //get the current time
+    t = micros();
     
-    //get pulse length of 2nd ultrasound sensor and convert to distance
-    digitalWrite(trigPin2, LOW);
-    delayMicroseconds(2);
-    digitalWrite(trigPin2, HIGH);
-    delayMicroseconds(5);
-    digitalWrite(trigPin2, LOW);
-    duration = pulseIn(echoPin2, HIGH);
-    ultraSound[1] = duration/58.2;
-    if(ultraSound[1] > 300)
-    {
-      ultraSound[1] = 0;
-    }
-    //Read the orientation (done directly after ultrasound as we want them to be IDEALLY read at the same time)
-    myOrientation = pullStuff(); //yaw - pitch - roll
+    //Read the orientation and accelerations on xyz axes
+    allData myData = pullStuff(); //yaw, pitch, roll, xyz accelerations
+    myOrientation = myData.o;
+    myAcceleration = myData.a;
 
-    absoluteHeight1 = calculateHeight(0);  
-    absoluteHeight2 = calculateHeight(1);
+    //at instant 0, previous speed is set to 0 by the initialise function
+    //using previous speed, time between the last reading and this one, and the upward acceleration, find the current speed.
+    //speed = (prevSpeed
+    //vitesseFinale = vitesseInitiale + acceleration*temps
+    currentHeight += addToHeight(frontOfTable - 1);
+    velocity = calculateVelocity(frontOfTable-1);
+    
     
   }
-  int calculateHeight(int ultraSoundNum) // math function to calculate max height
+  /*int calculateHeight(int ultraSoundNum) // math function to calculate max height
   {
     return ultraSound[ultraSoundNum]*sqrt(abs(1 - pow(sin(myOrientation.pitch - offSetPitch - basePitch), 2) - pow(sin(myOrientation.roll - offSetRoll - baseRoll), 2)));
-  }
+  }*/
 };
 
 const int numSavedStates = 6;
 state states[numSavedStates];
-int frontOfTable = 0; // newest value in table
 
-//This helps to see which of the two sensors is triggered first (so which is the front/back)
-bool firstUltrasound; //0 for the first one, 1 for the other
+float calculateVelocity(int pos)
+{
+   return states[(frontOfTable-2)%numSavedStates].velocity + states[pos].myAcceleration.y*((states[pos].t - states[(frontOfTable-2)%numSavedStates].t)*0.000004); //TODO make sure height accel is y
+}
+float addToHeight(int pos)
+{
+  //calculate distance travelled over 1 tick, adds this value to currentHeight
+  //distance = initialVelocity*time + 1/2(accelerationY)*time^2
+  unsigned long deltaT = states[pos].t - states[(frontOfTable-2)%numSavedStates].t;
+  deltaT *= 0.000004;
+  float accelerationAverage = (states[pos].myAcceleration.y + states[(frontOfTable-2)%numSavedStates].myAcceleration.y)/2; //average of previous acceleration and current one
+  return states[(frontOfTable-2)%numSavedStates].velocity*deltaT + 0.5*accelerationAverage*(deltaT*deltaT);
+}
 
 //This helps get a baseline height
 int baseHeight1;
 int baseHeight2;
 
-int maxHeight = 0;
-
 typedef bool(*functor)(void);
 
 bool initialise()
 {
+  currentHeight = 0;
+  maxHeight = 0;
   //these values are substracted from the angle found
   //this makes it so that when we start on an incline, that point becomes (0,0,0) until the end of the trick.
   baseYaw = states[(frontOfTable-1)%numSavedStates].myOrientation.yaw; //frontOfTable-1 is the most recently read value.
@@ -102,46 +97,35 @@ bool initialise()
   //set the front of the table
   frontOfTable%=numSavedStates;
 
-  baseHeight1 = states[(frontOfTable-1)%numSavedStates].absoluteHeight1;
-  baseHeight2 = states[(frontOfTable-1)%numSavedStates].absoluteHeight2;
+  //Make sure that upwards acceleration is 0 before trying to check for tricks
+  for(int i=0; i<10; i++)
+  {
+    temp.getData();
+    if(temp.myAcceleration.y < 1 && temp.myAcceleration.y > -1)
+    {
+      //we good
+    }
+    else
+      return false;
+  }
   return true;
 }
 
+bool front; //this represents the first "side" to be lifted, used in frontLift and backLift (see frontLift for utilisation)
+
 bool frontLift()
 {
-  bool flag1=false;
-  bool flag2=false;
-  //check if either of the ultrasound sensors increases abruptly
-  if((states[(frontOfTable+1)%numSavedStates].absoluteHeight1)+10 < (states[frontOfTable].absoluteHeight1)-10){ // +-10 to make less sensitive
-    flag1 = true;
-    }
-  if((states[(frontOfTable+1)%numSavedStates].absoluteHeight2)+10 < (states[frontOfTable].absoluteHeight2)-10){ // +-10 to make less sensitive
-    flag2 = true;
-  }
-  if(!flag1 && !flag2) 
-    return false;
-  else //one lifted
+  if(states[(frontOfTable-1)%numSavedStates].myOrientation.pitch > frontLiftAngle) //TODO
   {
-    if(flag1 && flag2) //both increased, then take the highest as front
-    {
-      if(states[(frontOfTable-1)%numSavedStates].absoluteHeight1 > states[(frontOfTable-1)%numSavedStates].absoluteHeight2)
-      {
-        firstUltrasound = 0;
-      }
-      else
-      {
-        firstUltrasound = 1;
-      }
-    }
-    else if(flag1) //si ultrason1 est celui qui a incrementer, alors on le sauve comme le "devant"
-      firstUltrasound = 0;
-    else
-      firstUltrasound = 1;
+    front = 0; //0 if angle is positive
+    return true;
   }
-  Serial.println("---------------------------------------------------------------------------------------------------");
-  
-  
- return true;
+  else if(states[(frontOfTable-1)%numSavedStates].myOrientation.pitch < 360 - frontLiftAngle) //TODO
+  {
+    front = 1; //1 if angle is negative
+    return true;
+  }
+  return false;
 }
 bool backLift()
 {
@@ -166,30 +150,7 @@ bool backLift()
 
 bool getMaxHeight()
 {
-  if(firstUltrasound == 0)
-  {
-    if(states[frontOfTable].absoluteHeight1 < states[(frontOfTable-1)%numSavedStates].absoluteHeight1) // compare newest with 2nd newest, if lower, means your starting to come back down, so calculate height
-    {
-      if((states[frontOfTable].absoluteHeight1 - states[(frontOfTable-1)%numSavedStates].absoluteHeight1) < 50) // if difference is too bad, faulty value so ont do anything with it
-      {
-        maxHeight = states[(frontOfTable-1)%numSavedStates].absoluteHeight1;   
-        Serial.println(maxHeight);
-        return true;
-      }
-      
-    }
-  }
-  else{
-    if(states[frontOfTable].absoluteHeight2 < states[(frontOfTable-1)%numSavedStates].absoluteHeight2) // compare newest with 2nd newest, if lower, means your starting to come back down, so calculate height
-    {
-      if((states[frontOfTable].absoluteHeight2 - states[(frontOfTable-1)%numSavedStates].absoluteHeight2) < 50) // if difference is too bad, faulty value so ont do anything with it
-      {
-        maxHeight = states[(frontOfTable-1)%numSavedStates].absoluteHeight2; 
-        Serial.println(maxHeight);
-        return true;
-      }
-    }
-  }
+  
   return false;
 }
 
@@ -262,12 +223,12 @@ void setup() {
   //Baud and pin setup
   Serial.begin(115200); //print to serial monitor
   //Serial.println(F("1"));
-  pinMode(trigPin1, OUTPUT);
+  /*pinMode(trigPin1, OUTPUT);
   pinMode(echoPin1, INPUT);
   pinMode(trigPin2, OUTPUT);
   pinMode(echoPin2, INPUT);
   pinMode(pressIn1, INPUT);
-  pinMode(pressIn2, INPUT);
+  pinMode(pressIn2, INPUT);*/
   
   //create decision tree
   //root
@@ -337,7 +298,7 @@ void loop() {
   }
   else
   {
-    if(counter == 5) // do the functions 5 times unless they return true
+    if(counter == 100) // do the functions 5 times unless they return true
     {
       counter = 0;
       curr = root; //retourne au debut
