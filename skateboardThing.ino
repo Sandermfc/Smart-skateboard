@@ -16,14 +16,15 @@ int basePitch=0;
 int baseRoll=0;
 
 int prevHeight = 0;
+float prevVelocity = 0;
+unsigned long prevTime = 0;
+acceleration prevAccel;
+
 float maxHeight = 0;
-float currentHeight = 0;
+double currentHeight = 0;
 int frontLiftAngle = 40;
 
-const int numSavedStates = 6;
-
 //pullDataXG.h deals with the accelerometer/gyro pins
-int frontOfTable = 0; // newest value in table
 float calculateVelocity();
 float addToHeight();
 class state
@@ -31,11 +32,9 @@ class state
   public:
   orientation myOrientation;  //xyz coordinates
   acceleration myAcceleration;
-  int absoluteHeight1;
-  int absoluteHeight2;
   float velocity; //velocity (speed) in the y  (upward) axis only
   unsigned long t;
-
+  
   void getData()
   {
     //get the current time
@@ -87,31 +86,38 @@ class state
     Serial.print("velociratpor ");
     Serial.println(velocity);
     
+    //Set the prev**** variables for the next time around
+    prevTime = t;
+    prevVelocity = velocity;
+    prevAccel = myAcceleration;
+    
   }
   /*int calculateHeight(int ultraSoundNum) // math function to calculate max height
   {
     return ultraSound[ultraSoundNum]*sqrt(abs(1 - pow(sin(myOrientation.pitch - offSetPitch - basePitch), 2) - pow(sin(myOrientation.roll - offSetRoll - baseRoll), 2)));
   }*/
-};
-
-state states[numSavedStates];
+}data;
 
 float calculateVelocity()
 {
   Serial.println("CALCULATE VEL FUNC ");
-  Serial.print("front table ");
-  Serial.println(frontOfTable);
-  float x = states[(frontOfTable-2)%numSavedStates].velocity;
+  if(data.myAcceleration.z < 0.67 && data.myAcceleration.z > 0.64)
+  {
+    Serial.println("still");
+    return 0.0;
+  }
+  
+  float x = prevVelocity;
   Serial.print(F("Velocity1 "));
   Serial.println(x);
-  double fdeltaT = (states[(frontOfTable-1)%numSavedStates].t - states[(frontOfTable-2)%numSavedStates].t)*0.000004;
+  double fdeltaT = (data.t - prevTime)*0.000004;
   Serial.print("t 1 ");
-  Serial.println(states[(frontOfTable-1)%numSavedStates].t);
+  Serial.println(data.t);
   Serial.print("t 2 ");
-  Serial.println(states[(frontOfTable-2)%numSavedStates].t);
+  Serial.println(prevTime);
   Serial.print("fdeltaT ");
   Serial.println(fdeltaT);
-  x += (states[(frontOfTable-1)%numSavedStates].myAcceleration.y)*fdeltaT; //TODO make sure its in seconds
+  x += (data.myAcceleration.z)*fdeltaT; //TODO make sure its in seconds
   Serial.print(F("Velocity2 "));
   Serial.print(x);
   return x;
@@ -120,16 +126,12 @@ float addToHeight()
 {
   //calculate distance travelled over 1 tick, adds this value to currentHeight
   //distance = initialVelocity*time + 1/2(accelerationY)*time^2
-  unsigned long deltaT = states[(frontOfTable-1)%numSavedStates].t - states[(frontOfTable-2)%numSavedStates].t;
+  unsigned long deltaT = data.t - prevTime;
   double fdeltaT = deltaT * 0.000004; //Make sure its in seconds
-  float accelerationAverage = (states[(frontOfTable-1)%numSavedStates].myAcceleration.y + states[(frontOfTable-2)%numSavedStates].myAcceleration.y)/2; //average of previous acceleration and current one
+  float accelerationAverage = (data.myAcceleration.z + prevAccel.z)/2; //average of previous acceleration and current one
   //accelerationAverage -= offSetY;
-  return states[(frontOfTable-2)%numSavedStates].velocity*fdeltaT + 0.5*accelerationAverage*(fdeltaT*fdeltaT);
+  return prevVelocity*fdeltaT + 0.5*accelerationAverage*(fdeltaT*fdeltaT);
 }
-
-//This helps get a baseline height
-int baseHeight1;
-int baseHeight2;
 
 typedef bool(*functor)(void);
 
@@ -139,22 +141,17 @@ bool initialise()
   maxHeight = 0;
   //these values are substracted from the angle found
   //this makes it so that when we start on an incline, that point becomes (0,0,0) until the end of the trick.
-  baseYaw = states[(frontOfTable-1)%numSavedStates].myOrientation.yaw; //frontOfTable-1 is the most recently read value.
-  basePitch = states[(frontOfTable-1)%numSavedStates].myOrientation.pitch;
-  baseRoll = states[(frontOfTable-1)%numSavedStates].myOrientation.roll;
+  baseYaw = data.myOrientation.yaw; //frontOfTable-1 is the most recently read value.
+  basePitch = data.myOrientation.pitch;
+  baseRoll = data.myOrientation.roll;
   //Get all the data at this instant into a struct
-  state temp;
-  temp.getData();
-  //set the circular tables front to this state (and increment front)
-  states[frontOfTable++] = temp;
-  //set the front of the table
-  frontOfTable%=numSavedStates;
+  data.getData();
 
   //Make sure that upwards acceleration is 0 before trying to check for tricks
   for(int i=0; i<10; i++)
   {
-    temp.getData();
-    if(temp.myAcceleration.y < 1 && temp.myAcceleration.y > -1)
+    data.getData();
+    if(data.myAcceleration.y < 1 && data.myAcceleration.y > -1)
     {
       //we good
     }
@@ -168,12 +165,12 @@ bool front; //this represents the first "side" to be lifted, used in frontLift a
 
 bool frontLift()
 {
-  if(states[(frontOfTable-1)%numSavedStates].myOrientation.pitch > frontLiftAngle) //TODO
+  if(data.myOrientation.pitch > frontLiftAngle) //TODO
   {
     front = 0; //0 if angle is positive
     return true;
   }
-  else if(states[(frontOfTable-1)%numSavedStates].myOrientation.pitch < 360 - frontLiftAngle) //TODO
+  else if(data.myOrientation.pitch < 360 - frontLiftAngle) //TODO
   {
     front = 1; //1 if angle is negative
     return true;
@@ -184,7 +181,7 @@ bool backLift()
 {
   if(!front)//if first to lift was 2 check abs height 1
   {
-    if(states[(frontOfTable-1)%numSavedStates].myOrientation.pitch < 360 - frontLiftAngle) 
+    if(data.myOrientation.pitch < 360 - frontLiftAngle) 
     {
       Serial.println(F("+++++++++++++++++++++++++++++++++++++++++++++++++++++++"));
       return true;
@@ -192,7 +189,7 @@ bool backLift()
   }
   else
   {
-    if(states[(frontOfTable-1)%numSavedStates].myOrientation.pitch > frontLiftAngle)
+    if(data.myOrientation.pitch > frontLiftAngle)
     {
       Serial.println(F("+++++++++++++++++++++++++++++++++++++++++++++++++++++++"));
       return true;
@@ -219,7 +216,7 @@ bool landed()
 {
   const float marginAccel = 30.0;
   const float marginAngleP = 10.0;
-  if(-1*marginAccel < states[(frontOfTable - 1)%numSavedStates].myAcceleration.y < marginAccel && -1*marginAngleP < states[(frontOfTable - 1)%numSavedStates].myOrientation.pitch < marginAngleP)
+  if(-1*marginAccel < data.myAcceleration.y < marginAccel && -1*marginAngleP < data.myOrientation.pitch < marginAngleP)
   {
     Serial.print("//////////////////////////////////////////////////////");
     delay(2000);//TODO
@@ -229,7 +226,6 @@ bool landed()
 }
 
 class node
-
 {
   public:
   node* child[10];
@@ -322,40 +318,27 @@ void setup() {
   
   //Serial.println(F("prepXG"));
   prepareXG(); //calls the initialise function in the pullDataXG.h header
-  state temp;
-  for(int i=0; i<numSavedStates; i++)
-  {
-    states[i].velocity = 0;
-    states[i].t = 0;
-  }
   
   for(int i =0; i< 1000; i++) // do it a 100 times to stabilize the values
   {
-    temp.getData();
-    states[frontOfTable++] = temp;
-    frontOfTable%=numSavedStates;
+    data.getData();
   }
   delay(2000); 
-  temp.getData();
-  offSetPitch = temp.myOrientation.pitch; // set offset
-  offSetRoll = temp.myOrientation.roll;
-  offSetYaw = temp.myOrientation.yaw;
-  offSetX = temp.myAcceleration.x;
-  offSetY = temp.myAcceleration.y;
-  offSetZ = temp.myAcceleration.z;
+  data.getData();
+  offSetPitch = data.myOrientation.pitch; // set offset
+  offSetRoll = data.myOrientation.roll;
+  offSetYaw = data.myOrientation.yaw;
+  offSetX = data.myAcceleration.x;
+  offSetY = data.myAcceleration.y;
+  offSetZ = data.myAcceleration.z;
   curr = root;
+  prevTime = micros(); //important for the very first acceleration calculation, otherwise prevTime = 0 and deltaT = 200s, distance becomes a lot and messes with future readings for a while
 }
 
 void loop() {
-  state temp;
   Serial.println("loop");
   //Get all the data at this instant into a struct
-  temp.getData();
-  //set the circular tables front to this state (and increment front)
-  states[frontOfTable++] = temp;
-  //set the front of the table
-  frontOfTable%=numSavedStates;
-
+  data.getData();
   //Test all conditions
   int nextChild = curr->test();
   if(nextChild != -1)
@@ -366,9 +349,7 @@ void loop() {
     {
       curr = root;
     }
-    temp.getData();
-    states[frontOfTable++] = temp;
-    frontOfTable%=numSavedStates;
+    data.getData();
   }
   else
   {
