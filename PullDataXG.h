@@ -110,7 +110,7 @@ MPU6050 mpu;
 // components with gravity removed and adjusted for the world frame of
 // reference (yaw is relative to initial orientation, since no magnetometer
 // is present in this case). Could be quite handy in some cases.
-//#define OUTPUT_READABLE_WORLDACCEL
+#define OUTPUT_READABLE_WORLDACCEL
 
 // uncomment "OUTPUT_TEAPOT" if you want output that matches the
 // format used for the InvenSense teapot demo
@@ -147,7 +147,18 @@ struct orientation
   int roll;
   int pitch;
 };
-
+struct acceleration
+{
+	//TODO maybe have to be int?
+	double x;
+	double y;
+	double z;
+};
+struct allData
+{
+	orientation o;
+	acceleration a;
+};
 
 // ================================================================
 // ===               INTERRUPT DETECTION ROUTINE                ===
@@ -204,9 +215,9 @@ void prepareXG() {
     devStatus = mpu.dmpInitialize();
 
     // supply your own gyro offsets here, scaled for min sensitivity
-    mpu.setXGyroOffset(220);
-    mpu.setYGyroOffset(76);
-    mpu.setZGyroOffset(-85);
+    mpu.setXGyroOffset(220);//220
+    mpu.setYGyroOffset(76);//76
+    mpu.setZGyroOffset(-85);//-85
     mpu.setZAccelOffset(1788); // 1688 factory default for my test chip
 
     // make sure it worked (returns 0 if so)
@@ -245,12 +256,14 @@ void prepareXG() {
 // ===                    MAIN PROGRAM LOOP                     ===
 // ================================================================
 
-orientation pullStuff() {
-    orientation a;
+allData pullStuff() {
+	allData ret;
+    	orientation ori;
+	acceleration acc;
     // if programming failed, don't try to do anything
     if (!dmpReady){
 	Serial.print(F("dmp was not ready\n"));	   
-	    return a;
+	    return ret;
     }
     // wait for MPU interrupt or extra packet(s) available
     /*while (!mpuInterrupt && fifoCount < packetSize) {
@@ -322,15 +335,13 @@ orientation pullStuff() {
             mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
             //Serial.print("ypr\t");
             //Serial.print(ypr[0] * 180/M_PI);
-            a.yaw = ypr[0] * 180/M_PI;
+            ori.yaw = ypr[0] * 180/M_PI;
             //Serial.print("\t");
             //Serial.print(ypr[1] * 180/M_PI);
-            a.pitch = ypr[1] * 180/M_PI;
+            ori.pitch = ypr[1] * 180/M_PI;
             //Serial.print("\t");
             //Serial.println(ypr[2] * 180/M_PI);
-            a.roll = ypr[2] * 180/M_PI;
-	    mpu.resetFIFO(); //TODO, important?
-            return a;
+            ori.roll = ypr[2] * 180/M_PI;
         #endif
 
         #ifdef OUTPUT_READABLE_REALACCEL
@@ -357,10 +368,14 @@ orientation pullStuff() {
             mpu.dmpGetLinearAccelInWorld(&aaWorld, &aaReal, &q);
             Serial.print(F("aworld\t"));
             Serial.print(aaWorld.x);
+	    acc.x = aaWorld.x;
             Serial.print(F("\t"));
             Serial.print(aaWorld.y);
+	    acc.y = aaWorld.y;
             Serial.print(F("\t"));
             Serial.println(aaWorld.z);
+	    acc.z = aaWorld.z;
+	    //mpu.resetFIFO();
         #endif
     
         #ifdef OUTPUT_TEAPOT
@@ -376,7 +391,11 @@ orientation pullStuff() {
             Serial.write(teapotPacket, 14);
             teapotPacket[11]++; // packetCount, loops at 0xFF on purpose
         #endif
+	
 
+	ret.a = acc;
+	ret.o = ori;
+	return ret;
         // blink LED to indicate activity
         blinkState = !blinkState;
         digitalWrite(LED_PIN, blinkState);
