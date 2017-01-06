@@ -4,6 +4,9 @@
 int offSetPitch; // starting point for yaw pitch roll
 int offSetYaw;
 int offSetRoll;
+float offSetX;
+float offSetY;
+float offSetZ;
 int counter = 0; // do functions this number of times unti give true
 
 //Baseline orientation (not the same as offset, which is to calibrate at a universal 0 point)
@@ -12,43 +15,77 @@ int baseYaw=0;
 int basePitch=0;
 int baseRoll=0;
 
+int prevHeight = 0;
 float maxHeight = 0;
 float currentHeight = 0;
 int frontLiftAngle = 40;
 
+const int numSavedStates = 6;
+
 //pullDataXG.h deals with the accelerometer/gyro pins
 int frontOfTable = 0; // newest value in table
-float calculateVelocity(int pos);
-float addToHeight(int pos);
+float calculateVelocity();
+float addToHeight();
 class state
 {
   public:
-  //int ultraSound[2];
   orientation myOrientation;  //xyz coordinates
   acceleration myAcceleration;
   int absoluteHeight1;
   int absoluteHeight2;
   float velocity; //velocity (speed) in the y  (upward) axis only
   unsigned long t;
-  //more stuff for gyroscope?
 
   void getData()
   {
     //get the current time
-    t = micros();
-    
     //Read the orientation and accelerations on xyz axes
-    allData myData = pullStuff(); //yaw, pitch, roll, xyz accelerations
+    allData myData = pullStuff(); //yaw, pitch, roll, xyz accelerations TODOOOO
     myOrientation = myData.o;
     myAcceleration = myData.a;
+    
+    //myAcceleration.x-=offSetX;
+    //myAcceleration.y-=offSetY;
+    //myAcceleration.z-=offSetZ;
+    
+    //map acceleration to 2G interval (-19.6 to +19.6)
+    myAcceleration.x/= 1671.8367346939;
+    myAcceleration.y/= 1671.8367346939;
+    myAcceleration.z/= 1671.8367346939;
+    //myAcceleration.x = map(myAcceleration.x, -32768, 32768, -19.6, 19.6);
+    //myAcceleration.y = map(myAcceleration.y, -32768, 32768, -19.6, 19.6);
+    //myAcceleration.z = map(myAcceleration.z, -32768, 32768, -19.6, 19.6);
+    Serial.print("x ");
+    Serial.println(myAcceleration.x);
+    Serial.print("y ");
+    Serial.println(myAcceleration.y);
+    Serial.print("z ");
+    Serial.println(myAcceleration.z);
+   /* Serial.print("yaw ");
+    Serial.println(myOrientation.yaw);
+    Serial.print("pitch ");
+    Serial.println(myOrientation.pitch);
+    Serial.print("roll ");
+    Serial.println(myOrientation.roll);
+    Serial.print("x ");
+    Serial.println(myAcceleration.x);
+    Serial.print("y ");
+    Serial.println(myAcceleration.y);
+    Serial.print("z ");
+    Serial.println(myAcceleration.z);*/
 
     //at instant 0, previous speed is set to 0 by the initialise function
     //using previous speed, time between the last reading and this one, and the upward acceleration, find the current speed.
     //speed = (prevSpeed
     //vitesseFinale = vitesseInitiale + acceleration*temps
-    currentHeight += addToHeight(frontOfTable - 1);
-    velocity = calculateVelocity(frontOfTable-1);
-    
+    currentHeight += addToHeight();
+    t = micros();
+    Serial.println(t);
+    velocity = calculateVelocity();
+    Serial.print("current Height ");
+    Serial.println(currentHeight);
+    Serial.print("velociratpor ");
+    Serial.println(velocity);
     
   }
   /*int calculateHeight(int ultraSoundNum) // math function to calculate max height
@@ -57,21 +94,37 @@ class state
   }*/
 };
 
-const int numSavedStates = 6;
 state states[numSavedStates];
 
-float calculateVelocity(int pos)
+float calculateVelocity()
 {
-   return states[(frontOfTable-2)%numSavedStates].velocity + states[pos].myAcceleration.y*((states[pos].t - states[(frontOfTable-2)%numSavedStates].t)*0.000004); //TODO make sure height accel is y
+  Serial.println("CALCULATE VEL FUNC ");
+  Serial.print("front table ");
+  Serial.println(frontOfTable);
+  float x = states[(frontOfTable-2)%numSavedStates].velocity;
+  Serial.print(F("Velocity1 "));
+  Serial.println(x);
+  double fdeltaT = (states[(frontOfTable-1)%numSavedStates].t - states[(frontOfTable-2)%numSavedStates].t)*0.000004;
+  Serial.print("t 1 ");
+  Serial.println(states[(frontOfTable-1)%numSavedStates].t);
+  Serial.print("t 2 ");
+  Serial.println(states[(frontOfTable-2)%numSavedStates].t);
+  Serial.print("fdeltaT ");
+  Serial.println(fdeltaT);
+  x += (states[(frontOfTable-1)%numSavedStates].myAcceleration.y)*fdeltaT; //TODO make sure its in seconds
+  Serial.print(F("Velocity2 "));
+  Serial.print(x);
+  return x;
 }
-float addToHeight(int pos)
+float addToHeight()
 {
   //calculate distance travelled over 1 tick, adds this value to currentHeight
   //distance = initialVelocity*time + 1/2(accelerationY)*time^2
-  unsigned long deltaT = states[pos].t - states[(frontOfTable-2)%numSavedStates].t;
-  deltaT *= 0.000004;
-  float accelerationAverage = (states[pos].myAcceleration.y + states[(frontOfTable-2)%numSavedStates].myAcceleration.y)/2; //average of previous acceleration and current one
-  return states[(frontOfTable-2)%numSavedStates].velocity*deltaT + 0.5*accelerationAverage*(deltaT*deltaT);
+  unsigned long deltaT = states[(frontOfTable-1)%numSavedStates].t - states[(frontOfTable-2)%numSavedStates].t;
+  double fdeltaT = deltaT * 0.000004; //Make sure its in seconds
+  float accelerationAverage = (states[(frontOfTable-1)%numSavedStates].myAcceleration.y + states[(frontOfTable-2)%numSavedStates].myAcceleration.y)/2; //average of previous acceleration and current one
+  //accelerationAverage -= offSetY;
+  return states[(frontOfTable-2)%numSavedStates].velocity*fdeltaT + 0.5*accelerationAverage*(fdeltaT*fdeltaT);
 }
 
 //This helps get a baseline height
@@ -129,9 +182,9 @@ bool frontLift()
 }
 bool backLift()
 {
-  if(!firstUltrasound)//if first to lift was 2 check abs height 1
+  if(!front)//if first to lift was 2 check abs height 1
   {
-    if((states[(frontOfTable+1)%numSavedStates].absoluteHeight1+2) < (states[frontOfTable].absoluteHeight1-2)) // +-2 sensitivity
+    if(states[(frontOfTable-1)%numSavedStates].myOrientation.pitch < 360 - frontLiftAngle) 
     {
       Serial.println(F("+++++++++++++++++++++++++++++++++++++++++++++++++++++++"));
       return true;
@@ -139,7 +192,7 @@ bool backLift()
   }
   else
   {
-    if((states[(frontOfTable+1)%numSavedStates].absoluteHeight2+2) < (states[frontOfTable].absoluteHeight2-2)) // +-2 sensitivity
+    if(states[(frontOfTable-1)%numSavedStates].myOrientation.pitch > frontLiftAngle)
     {
       Serial.println(F("+++++++++++++++++++++++++++++++++++++++++++++++++++++++"));
       return true;
@@ -150,16 +203,26 @@ bool backLift()
 
 bool getMaxHeight()
 {
-  
+  if(prevHeight > currentHeight)
+  {
+    maxHeight = prevHeight;
+    return true;
+  }
+  else 
+  {
+    prevHeight = currentHeight;
+  }
   return false;
 }
 
 bool landed() 
 {
-  if((states[frontOfTable].absoluteHeight1 -2 > baseHeight1 && states[frontOfTable].absoluteHeight1 +2 < baseHeight1) && ((states[frontOfTable].absoluteHeight2 -2 > baseHeight2 && states[frontOfTable].absoluteHeight2 +2 < baseHeight2))) // if skateboad is as close to the ground as when it satrted, we can say it landed
+  const float marginAccel = 30.0;
+  const float marginAngleP = 10.0;
+  if(-1*marginAccel < states[(frontOfTable - 1)%numSavedStates].myAcceleration.y < marginAccel && -1*marginAngleP < states[(frontOfTable - 1)%numSavedStates].myOrientation.pitch < marginAngleP)
   {
     Serial.print("//////////////////////////////////////////////////////");
-    delay(2000);
+    delay(2000);//TODO
     return true;
   }
   return false;
@@ -221,7 +284,7 @@ node* curr;
 
 void setup() {
   //Baud and pin setup
-  Serial.begin(115200); //print to serial monitor
+  Serial.begin(57600); //print to serial monitor
   //Serial.println(F("1"));
   /*pinMode(trigPin1, OUTPUT);
   pinMode(echoPin1, INPUT);
@@ -260,15 +323,26 @@ void setup() {
   //Serial.println(F("prepXG"));
   prepareXG(); //calls the initialise function in the pullDataXG.h header
   state temp;
-  for(int i =0; i< 100; i++) // do it a 100 times to stabilize the values
+  for(int i=0; i<numSavedStates; i++)
+  {
+    states[i].velocity = 0;
+    states[i].t = 0;
+  }
+  
+  for(int i =0; i< 1000; i++) // do it a 100 times to stabilize the values
   {
     temp.getData();
+    states[frontOfTable++] = temp;
+    frontOfTable%=numSavedStates;
   }
   delay(2000); 
   temp.getData();
   offSetPitch = temp.myOrientation.pitch; // set offset
   offSetRoll = temp.myOrientation.roll;
   offSetYaw = temp.myOrientation.yaw;
+  offSetX = temp.myAcceleration.x;
+  offSetY = temp.myAcceleration.y;
+  offSetZ = temp.myAcceleration.z;
   curr = root;
 }
 
