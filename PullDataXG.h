@@ -259,16 +259,24 @@ void prepareXG() {
 allData pullStuff() {
 	allData ret;
     	orientation ori;
+	ori.yaw=0;
+	ori.pitch=0;
+	ori.roll=0;
+
 	acceleration acc;
+	acc.x=0;
+	acc.y=0;
+	acc.z=0;
+	ret.o = ori;
+	ret.a = acc;
     // if programming failed, don't try to do anything
     if (!dmpReady){
 	Serial.print(F("dmp was not ready\n"));	   
 	    return ret;
     }
     // wait for MPU interrupt or extra packet(s) available
-    /*while (!mpuInterrupt && fifoCount < packetSize) {
+    while (!mpuInterrupt && fifoCount < packetSize) {
         // other program behavior stuff here
-	Serial.println("popp");
         // .
         // .
         // .
@@ -278,7 +286,7 @@ allData pullStuff() {
         // .
         // .
         // .
-    }*/
+    }
     // reset interrupt flag and get INT_STATUS byte
     mpuInterrupt = false;
     mpuIntStatus = mpu.getIntStatus();
@@ -289,7 +297,7 @@ allData pullStuff() {
         // reset so we can continue cleanly
         mpu.resetFIFO();
         Serial.println(F("FIFO overflow!"));
-
+	return ret; //ERROR
     // otherwise, check for DMP data ready interrupt (this should happen frequently)
     } else if (mpuIntStatus & 0x02) {
         // wait for correct available data length, should be a VERY short wait
@@ -366,14 +374,14 @@ allData pullStuff() {
             mpu.dmpGetGravity(&gravity, &q);
             mpu.dmpGetLinearAccel(&aaReal, &aa, &gravity);
             mpu.dmpGetLinearAccelInWorld(&aaWorld, &aaReal, &q);
-            Serial.print(F("aworld\t"));
-            Serial.print(aaWorld.x);
+            //Serial.print(F("aworld\t"));
+            //Serial.print(aaWorld.x);
 	    acc.x = aaWorld.x;
-            Serial.print(F("\t"));
-            Serial.print(aaWorld.y);
+            //Serial.print(F("\t"));
+            //Serial.print(aaWorld.y);
 	    acc.y = aaWorld.y;
-            Serial.print(F("\t"));
-            Serial.println(aaWorld.z);
+            //Serial.print(F("\t"));
+            //Serial.println(aaWorld.z);
 	    acc.z = aaWorld.z;
 	    //mpu.resetFIFO();
         #endif
