@@ -1,6 +1,17 @@
+  - IMPLEMENT OFFSETS FOR ORIENTATIONS!!!!
+  - Remove variables basePitch, baseYaw and baseRoll and all calls to them. (or fully implement them)
+  - Remove math.h library
+  - Change most things to double to gain more precision.
+  - Remove all the Serial.print tests (if we keep some, have an if wrapper so they are only run in "developer mode", just a constant bool the programmer can change)
+  - Make sure we are dividing by the right constant around line 53. (is it really 1671.83)
+  - Remove unnecessary commented code or unnecessary comments.
+  - Make sure all variables for specific angles / accels are global constants to make things cleaner.
+  - Make sure time is divided by proper constant to convert to seconds.
+
+
 *********************************************************************************************************************
 *********************************************************************************************************************
-*******************************************ALL OF THIS HAS BEEN COMPLETED********************************************
+*******************************************BELOW HAS ALL BEEN COMPLETED**********************************************
 *********************************************************************************************************************
 *********************************************************************************************************************
 
