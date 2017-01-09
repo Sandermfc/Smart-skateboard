@@ -1,3 +1,6 @@
-- Get height values accurately using accel/gyro instead of with ultrasound sensors
-- Complete rewrite of all tester functors
-- Output to bluetooth (find a library that doesnt interfere with "math.h"
+(DONE) - Get height values accurately using accel/gyro instead of with ultrasound sensors
+(DONE) - Complete rewrite of all tester functors
+(DONE) - Output to bluetooth (find a library that doesnt interfere with "math.h"
+- Scale the height value to meters
+- Try and make height calculation more accurate (possibly take an average of multiple readings from FIFObuffer to negate margin of error)
+- Apply a points system.
